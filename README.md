@@ -1,6 +1,23 @@
 # JidoManagedAgents
 
-> This is a vibe-coded prototype that started right after Claude Managed Agents was released. The goal is to give the community a place to build a Jido-based alternative to Anthropic's managed agents, and PRs are welcome to help make that real. See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to help.
+## Status And Expectations: April 10, 2026, 5:00 p.m. CT
+
+This repository is being released in public very early.
+
+As of Friday, April 10, 2026 at 5:00 p.m. Central Time, Anthropic's Claude Managed Agents public materials are roughly 48 hours old. I wanted to respond quickly with a Jido-based alternative that the community can run, inspect, critique, and help build in the open.
+
+This is pre-alpha code. I put together a plan, built an end-to-end first implementation, and shipped it before the normal QA, hardening, and polish cycle I would usually require for a public release. I would not normally release code in this state.
+
+I am releasing it anyway because managed agents are an active topic right now, and I think it is more useful for the community to react to a working first pass than to wait for a quieter and more polished launch. This initial version should be treated as exactly that: an initial version.
+
+Set expectations accordingly:
+
+- the current codebase has not been QA'd to the standard I expect for a normal release
+- rough edges, missing safeguards, and incomplete UX are expected in this first pass
+- the README will be the primary place for status notes, communication, and build-in-public updates in the near term
+- quality, tests, docs, and operator experience should improve in public from here
+
+Jido has a commitment to quality as the ecosystem grows. The point of releasing this early is not to lower that bar. It is to let the community watch the bar get raised in real time and contribute to that process. If you want to help move this from pre-alpha prototype to a credible open source managed-agents platform, PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 `JidoManagedAgents` is a Phoenix application that packages a local managed-agents stack behind an Anthropic-shaped `/v1` API, an authenticated dashboard, seeded demo data, and runnable example assets.
 
