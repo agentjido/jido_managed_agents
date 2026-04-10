@@ -1,5 +1,7 @@
 # JidoManagedAgents
 
+> This is a vibe-coded prototype that started right after Claude Managed Agents was released. The goal is to give the community a place to build a Jido-based alternative to Anthropic's managed agents, and PRs are welcome to help make that real. See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to help.
+
 `JidoManagedAgents` is a Phoenix application that packages a local managed-agents stack behind an Anthropic-shaped `/v1` API, an authenticated dashboard, seeded demo data, and runnable example assets.
 
 The quickest way to explore it is:
