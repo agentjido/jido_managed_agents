@@ -1,0 +1,51 @@
+name: Coding Assistant
+model:
+  id: claude-opus-4-6
+  speed: fast
+system: |
+  You are a helpful coding agent.
+  Always leave a trace.
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      permission_policy: always_ask
+    configs:
+      write:
+        permission_policy: always_allow
+      web_search:
+        enabled: false
+  - type: mcp_toolset
+    mcp_server_name: docs
+    permission_policy: always_ask
+  - type: custom
+    name: lookup_release
+    description: Looks up release notes.
+    input_schema:
+      type: object
+      properties:
+        package:
+          type: string
+    permission_policy: always_ask
+mcp_servers:
+  - type: url
+    name: docs
+    url: https://example.com/mcp
+    headers:
+      x-scope: engineering
+skills:
+  - type: custom
+    skill_id: __SKILL_ID__
+    version: 1
+    metadata:
+      audience: platform
+callable_agents:
+  - type: agent
+    id: __CALLABLE_AGENT_ID__
+    version: 1
+    metadata:
+      handoff: research
+description: Writes production code.
+metadata:
+  team: platform
+  delivery:
+    tier: gold

@@ -1,0 +1,11 @@
+{
+  "display_name": "Demo Integrations",
+  "description": "Third-party MCP credentials for the OSS quickstart.",
+  "display_metadata": {
+    "label": "OSS"
+  },
+  "metadata": {
+    "example": "quickstart",
+    "owner": "demo"
+  }
+}

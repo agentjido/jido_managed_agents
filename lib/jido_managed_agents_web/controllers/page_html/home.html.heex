@@ -1,0 +1,562 @@
+<% current_user = assigns[:current_user]
+primary_path = if current_user, do: ~p"/console/agents/new", else: ~p"/sign-in"
+primary_label = if current_user, do: "Launch Console", else: "Sign In"
+secondary_path = if current_user, do: ~p"/console/sessions", else: ~p"/register"
+secondary_label = if current_user, do: "Review Sessions", else: "Create Account" %>
+
+<DaisyUIComponents.Flash.flash_group flash={@flash} />
+
+<div class="min-h-screen bg-base-200 text-base-content">
+  <div class="relative isolate overflow-hidden">
+    <div class="absolute inset-x-0 top-0 h-[34rem] bg-gradient-to-b from-primary/12 via-secondary/8 to-transparent" />
+    <div class="absolute -left-20 top-28 size-72 rounded-full bg-secondary/15 blur-3xl" />
+    <div class="absolute -right-16 top-10 size-80 rounded-full bg-primary/20 blur-3xl" />
+
+    <header class="relative z-10">
+      <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
+        <.link
+          href={if current_user, do: ~p"/console/agents/new", else: ~p"/"}
+          class="flex items-center gap-3"
+        >
+          <span class="flex size-11 items-center justify-center rounded-[1.25rem] border border-primary/20 bg-primary/10 shadow-sm shadow-primary/10">
+            <img src={~p"/images/logo.svg"} alt="" class="size-6" />
+          </span>
+
+          <span class="min-w-0">
+            <span class="block truncate text-sm font-semibold tracking-[0.2em] text-base-content/60 uppercase">
+              Managed Agents
+            </span>
+            <span class="block truncate text-base font-semibold tracking-tight">
+              OSS runtime console
+            </span>
+          </span>
+        </.link>
+
+        <nav class="hidden items-center gap-6 text-sm font-medium text-base-content/65 lg:flex">
+          <a href="#capabilities" class="transition hover:text-base-content">Capabilities</a>
+          <a href="#workflow" class="transition hover:text-base-content">Workflow</a>
+          <a href="#oss" class="transition hover:text-base-content">OSS Surface</a>
+          <.link href={~p"/api/json/swaggerui"} class="transition hover:text-base-content">
+            API
+          </.link>
+        </nav>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+          <Layouts.theme_toggle />
+
+          <DaisyUIComponents.Button.button
+            :if={!current_user}
+            href={~p"/sign-in"}
+            ghost
+            size="sm"
+            class="hidden sm:inline-flex"
+          >
+            Sign In
+          </DaisyUIComponents.Button.button>
+
+          <DaisyUIComponents.Button.button
+            :if={!current_user}
+            href={~p"/register"}
+            color="primary"
+            size="sm"
+          >
+            Create Account
+          </DaisyUIComponents.Button.button>
+
+          <DaisyUIComponents.Button.button
+            :if={current_user}
+            href={~p"/console/agents/new"}
+            color="primary"
+            size="sm"
+          >
+            Console
+          </DaisyUIComponents.Button.button>
+
+          <DaisyUIComponents.Button.button
+            :if={current_user}
+            href={~p"/sign-out"}
+            ghost
+            size="sm"
+            method="delete"
+          >
+            Sign out
+          </DaisyUIComponents.Button.button>
+        </div>
+      </div>
+    </header>
+
+    <main class="relative z-10 pb-20">
+      <section class="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <.hero class="relative overflow-hidden rounded-[2rem] border border-base-300/80 bg-base-100 shadow-2xl shadow-base-content/5">
+          <:content class="relative z-10 w-full flex-col items-start gap-12 px-6 py-10 sm:px-10 sm:py-12 lg:flex-row lg:items-center lg:px-12 lg:py-16">
+            <div class="max-w-2xl space-y-6">
+              <.badge
+                color="secondary"
+                class="gap-2 border-none bg-secondary/12 px-4 py-3 text-secondary"
+              >
+                <.icon name="hero-command-line" class="size-4" />
+                Open source control plane for agent execution
+              </.badge>
+
+              <div :if={current_user} class="flex flex-wrap items-center gap-3">
+                <.badge
+                  color="success"
+                  class="gap-2 border-none bg-success/12 px-4 py-3 text-success"
+                >
+                  <.icon name="hero-check-circle" class="size-4" />
+                  Signed in as {current_user.email}
+                </.badge>
+              </div>
+
+              <div class="space-y-4">
+                <h1 class="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">
+                  Build, run, and inspect managed agents without losing the thread.
+                </h1>
+
+                <p class="max-w-xl text-base leading-8 text-base-content/72 sm:text-lg">
+                  Jido Managed Agents gives you an OSS runtime console for versioned agents,
+                  environment isolation, vault-backed credentials, programmatic APIs, MCP
+                  access, and replayable session traces.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-3 text-sm">
+                <.badge color="info" class="gap-2 border-none bg-info/12 px-4 py-3 text-info">
+                  <.icon name="hero-bolt" class="size-4" /> Session streams
+                </.badge>
+                <.badge
+                  color="warning"
+                  class="gap-2 border-none bg-warning/15 px-4 py-3 text-warning"
+                >
+                  <.icon name="hero-lock-closed" class="size-4" /> Vault isolation
+                </.badge>
+                <.badge
+                  color="accent"
+                  class="gap-2 border-none bg-accent/12 px-4 py-3 text-accent"
+                >
+                  <.icon name="hero-cpu-chip" class="size-4" /> MCP-ready
+                </.badge>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-3">
+                <DaisyUIComponents.Button.button
+                  href={primary_path}
+                  color="primary"
+                  size="lg"
+                  class="shadow-lg shadow-primary/20"
+                >
+                  {primary_label}
+                </DaisyUIComponents.Button.button>
+
+                <DaisyUIComponents.Button.button
+                  href={secondary_path}
+                  size="lg"
+                  ghost
+                  class="border border-base-300"
+                >
+                  {secondary_label}
+                </DaisyUIComponents.Button.button>
+
+                <DaisyUIComponents.Button.button
+                  href={~p"/api/json/swaggerui"}
+                  soft
+                  color="primary"
+                  size="lg"
+                >
+                  API Reference
+                </DaisyUIComponents.Button.button>
+              </div>
+            </div>
+
+            <div class="w-full max-w-xl lg:ml-auto">
+              <div class="grid gap-4">
+                <.card class="border border-base-300/80 bg-base-100/90 shadow-xl shadow-base-content/10 backdrop-blur">
+                  <:card_title class="text-xl">Control plane snapshot</:card_title>
+                  <:card_body class="gap-5">
+                    <p class="text-sm leading-7 text-base-content/68">
+                      Move from agent definition to audited runtime with one surface for authoring,
+                      execution, and post-run inspection.
+                    </p>
+
+                    <div class="rounded-[1.5rem] bg-neutral p-4 font-mono text-xs leading-6 text-neutral-content shadow-inner">
+                      <div class="text-neutral-content/55">session.run</div>
+                      <div>agent: "release-reviewer"</div>
+                      <div>environment: "restricted-demo-sandbox"</div>
+                      <div>vault: "demo-integrations"</div>
+                      <div>trace: streamed + replayable</div>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <div class="rounded-[1.25rem] border border-base-300 bg-base-200/60 p-4">
+                        <p class="text-sm font-semibold">Versioned agents</p>
+                        <p class="mt-2 text-sm leading-6 text-base-content/65">
+                          Keep prompts, skills, and tools attached to concrete runtime versions.
+                        </p>
+                      </div>
+
+                      <div class="rounded-[1.25rem] border border-base-300 bg-base-200/60 p-4">
+                        <p class="text-sm font-semibold">Structured traces</p>
+                        <p class="mt-2 text-sm leading-6 text-base-content/65">
+                          Inspect every turn, thread, and event without scraping logs by hand.
+                        </p>
+                      </div>
+                    </div>
+                  </:card_body>
+                </.card>
+
+                <.stats class="w-full border border-base-300/80 bg-base-100 shadow-xl stats-vertical sm:stats-horizontal">
+                  <.stat>
+                    <:title>Authoring</:title>
+                    <:value class="text-3xl">Agents</:value>
+                    <:desc>Versioned definitions, prompts, and tools</:desc>
+                  </.stat>
+
+                  <.stat>
+                    <:title>Runtime</:title>
+                    <:value class="text-3xl">Sessions</:value>
+                    <:desc>Replayable event streams with thread detail</:desc>
+                  </.stat>
+
+                  <.stat>
+                    <:title>Security</:title>
+                    <:value class="text-3xl">Vaults</:value>
+                    <:desc>Scoped credentials with isolation boundaries</:desc>
+                  </.stat>
+                </.stats>
+              </div>
+            </div>
+          </:content>
+
+          <div class="pointer-events-none absolute bottom-0 left-1/3 size-72 rounded-full bg-accent/10 blur-3xl" />
+          <div class="pointer-events-none absolute inset-y-0 right-0 hidden w-1/2 bg-gradient-to-l from-primary/10 via-transparent to-transparent lg:block" />
+        </.hero>
+      </section>
+
+      <section id="capabilities" class="mx-auto mt-24 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="max-w-2xl space-y-4">
+          <.badge color="primary" class="gap-2 border-none bg-primary/10 px-4 py-3 text-primary">
+            <.icon name="hero-squares-2x2" class="size-4" /> Capabilities
+          </.badge>
+
+          <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Built for agent systems that need more than a chat box.
+          </h2>
+
+          <p class="text-base leading-8 text-base-content/70 sm:text-lg">
+            The landing surface should explain the product immediately: define agents, lock down
+            execution, and inspect exactly what happened after the run.
+          </p>
+        </div>
+
+        <div class="mt-10 grid gap-6 lg:grid-cols-3">
+          <.card class="border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+            <:card_title class="gap-3 text-xl">
+              <span class="flex size-12 items-center justify-center rounded-[1rem] bg-primary/10 text-primary">
+                <.icon name="hero-cpu-chip" class="size-6" />
+              </span>
+              Agent catalog
+            </:card_title>
+            <:card_body class="gap-4">
+              <p class="text-sm leading-7 text-base-content/70">
+                Maintain versioned agents and skills in one place instead of scattering runtime
+                behavior across prompt files and ad hoc scripts.
+              </p>
+
+              <ul class="space-y-3 text-sm text-base-content/68">
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Builder flow for new agents and editable revisions.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Clear separation between catalog data and runtime session state.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  OSS-first surface that stays compatible with code-driven workflows.
+                </li>
+              </ul>
+            </:card_body>
+            <:card_actions class="justify-start px-6 pb-6">
+              <DaisyUIComponents.Button.button
+                href={primary_path}
+                ghost
+                class="border border-base-300"
+              >
+                Open builder
+              </DaisyUIComponents.Button.button>
+            </:card_actions>
+          </.card>
+
+          <.card class="border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+            <:card_title class="gap-3 text-xl">
+              <span class="flex size-12 items-center justify-center rounded-[1rem] bg-warning/12 text-warning">
+                <.icon name="hero-lock-closed" class="size-6" />
+              </span>
+              Secure execution
+            </:card_title>
+            <:card_body class="gap-4">
+              <p class="text-sm leading-7 text-base-content/70">
+                Bind sessions to environments and vault-backed credentials so the runtime boundary
+                is explicit before any tool or model call leaves the process.
+              </p>
+
+              <ul class="space-y-3 text-sm text-base-content/68">
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Environment registry for allowed tools and execution constraints.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Vaults and credentials grouped around practical integration boundaries.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  API and MCP surfaces for programmatic orchestration outside the browser.
+                </li>
+              </ul>
+            </:card_body>
+            <:card_actions class="justify-start px-6 pb-6">
+              <DaisyUIComponents.Button.button href={~p"/api/json/swaggerui"} soft color="warning">
+                Explore API
+              </DaisyUIComponents.Button.button>
+            </:card_actions>
+          </.card>
+
+          <.card class="border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+            <:card_title class="gap-3 text-xl">
+              <span class="flex size-12 items-center justify-center rounded-[1rem] bg-info/12 text-info">
+                <.icon name="hero-signal" class="size-6" />
+              </span>
+              Session observability
+            </:card_title>
+            <:card_body class="gap-4">
+              <p class="text-sm leading-7 text-base-content/70">
+                Treat sessions like first-class runtime artifacts instead of opaque blobs. The UI
+                should make traces, state changes, and failures easy to review under pressure.
+              </p>
+
+              <ul class="space-y-3 text-sm text-base-content/68">
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Timeline-oriented session detail with thread-aware event streams.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Runtime metadata that survives beyond a single browser tab.
+                </li>
+                <li class="flex gap-3">
+                  <.icon name="hero-check" class="mt-0.5 size-4 shrink-0 text-success" />
+                  Designed for real debugging, not just demos.
+                </li>
+              </ul>
+            </:card_body>
+            <:card_actions class="justify-start px-6 pb-6">
+              <DaisyUIComponents.Button.button
+                href={secondary_path}
+                ghost
+                class="border border-base-300"
+              >
+                Inspect sessions
+              </DaisyUIComponents.Button.button>
+            </:card_actions>
+          </.card>
+        </div>
+      </section>
+
+      <section id="workflow" class="mx-auto mt-24 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <.card class="border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+            <:card_title class="text-2xl">Define, bind, run, inspect</:card_title>
+            <:card_body class="gap-6">
+              <p class="max-w-2xl text-sm leading-7 text-base-content/70 sm:text-base">
+                The user path should read like an operator workflow, not a framework demo. This
+                sequence maps directly to the core surfaces already in the application.
+              </p>
+
+              <ul class="steps w-full steps-vertical xl:steps-horizontal">
+                <li class="step step-primary">Define agent</li>
+                <li class="step step-primary">Bind environment</li>
+                <li class="step step-primary">Attach vault</li>
+                <li class="step step-primary">Run session</li>
+                <li class="step step-primary">Inspect trace</li>
+              </ul>
+
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="rounded-[1.25rem] border border-base-300 bg-base-200/60 p-5">
+                  <p class="text-sm font-semibold">API-first by default</p>
+                  <p class="mt-2 text-sm leading-7 text-base-content/65">
+                    Ship through the browser when it is useful, then automate the same surfaces
+                    over the JSON API or the MCP endpoint.
+                  </p>
+                </div>
+
+                <div class="rounded-[1.25rem] border border-base-300 bg-base-200/60 p-5">
+                  <p class="text-sm font-semibold">Operator-friendly review</p>
+                  <p class="mt-2 text-sm leading-7 text-base-content/65">
+                    Sessions stay debuggable because the system preserves event history and thread
+                    context instead of flattening everything into one transcript.
+                  </p>
+                </div>
+              </div>
+            </:card_body>
+          </.card>
+
+          <div id="oss" class="grid gap-4">
+            <.collapse
+              checkbox
+              arrow
+              class="border border-base-300 bg-base-100 shadow-lg shadow-base-content/5"
+            >
+              <:title>
+                <span class="text-base font-semibold">What ships in OSS?</span>
+              </:title>
+              <p class="text-sm leading-7 text-base-content/70">
+                The catalog, environment console, vault and credential management, session
+                persistence, JSON API, and MCP integration surface are all available in the open.
+              </p>
+            </.collapse>
+
+            <.collapse
+              checkbox
+              arrow
+              class="border border-base-300 bg-base-100 shadow-lg shadow-base-content/5"
+            >
+              <:title>
+                <span class="text-base font-semibold">Why a dedicated landing page?</span>
+              </:title>
+              <p class="text-sm leading-7 text-base-content/70">
+                The default Phoenix starter page explains Phoenix. This project needs a homepage
+                that explains managed agents, shows the operator workflow, and points people toward
+                the actual product surfaces.
+              </p>
+            </.collapse>
+
+            <.collapse
+              checkbox
+              arrow
+              class="border border-base-300 bg-base-100 shadow-lg shadow-base-content/5"
+            >
+              <:title>
+                <span class="text-base font-semibold">Where should users go next?</span>
+              </:title>
+              <p class="text-sm leading-7 text-base-content/70">
+                New users should sign in or create an account, then start in the agent builder.
+                Returning users usually want the console or session review immediately.
+              </p>
+            </.collapse>
+
+            <.card class="border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+              <:card_title class="text-xl">Start from the real surfaces</:card_title>
+              <:card_body class="gap-4">
+                <p class="text-sm leading-7 text-base-content/70">
+                  Use the browser when you need velocity, then hand the same model over to API or
+                  MCP clients when you need repeatable automation.
+                </p>
+              </:card_body>
+              <:card_actions class="justify-start px-6 pb-6">
+                <DaisyUIComponents.Button.button href={primary_path} color="primary">
+                  Open console
+                </DaisyUIComponents.Button.button>
+                <DaisyUIComponents.Button.button
+                  href={~p"/api/json/swaggerui"}
+                  ghost
+                  class="border border-base-300"
+                >
+                  Swagger UI
+                </DaisyUIComponents.Button.button>
+              </:card_actions>
+            </.card>
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto mt-24 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <.footer class="gap-10 rounded-[2rem] border border-base-300 bg-base-100 px-8 py-10 shadow-xl shadow-base-content/5 lg:footer-horizontal">
+          <aside class="max-w-md space-y-4">
+            <div class="flex items-center gap-3">
+              <span class="flex size-11 items-center justify-center rounded-[1.25rem] border border-primary/20 bg-primary/10 shadow-sm shadow-primary/10">
+                <img src={~p"/images/logo.svg"} alt="" class="size-6" />
+              </span>
+              <div>
+                <p class="text-sm font-semibold tracking-[0.2em] text-base-content/60 uppercase">
+                  Managed Agents
+                </p>
+                <p class="text-lg font-semibold tracking-tight">
+                  Open source runtime control plane
+                </p>
+              </div>
+            </div>
+
+            <p class="text-sm leading-7 text-base-content/68">
+              Built for teams that need real runtime boundaries, inspectable sessions, and a UI
+              that explains the product instead of the framework scaffold it started from.
+            </p>
+          </aside>
+
+          <nav class="grid flex-1 gap-8 text-sm sm:grid-cols-3">
+            <div class="space-y-3">
+              <.footer_title>Product</.footer_title>
+              <.link
+                href="#capabilities"
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                Capabilities
+              </.link>
+              <.link
+                href="#workflow"
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                Workflow
+              </.link>
+              <.link
+                href="#oss"
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                OSS Surface
+              </.link>
+            </div>
+
+            <div class="space-y-3">
+              <.footer_title>Console</.footer_title>
+              <.link
+                href={primary_path}
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                {primary_label}
+              </.link>
+              <.link
+                href={secondary_path}
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                {secondary_label}
+              </.link>
+              <.link
+                href={~p"/api/json/swaggerui"}
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                API Reference
+              </.link>
+            </div>
+
+            <div class="space-y-3">
+              <.footer_title>Auth</.footer_title>
+              <.link
+                href={~p"/sign-in"}
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                Sign In
+              </.link>
+              <.link
+                href={~p"/register"}
+                class="block text-base-content/70 transition hover:text-base-content"
+              >
+                Create Account
+              </.link>
+            </div>
+          </nav>
+        </.footer>
+      </section>
+    </main>
+  </div>
+</div>

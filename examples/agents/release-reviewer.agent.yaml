@@ -1,0 +1,19 @@
+name: Release Reviewer
+model:
+  id: claude-sonnet-4-6
+  speed: standard
+system: |
+  Review a delegated release checklist and report concrete risks.
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      permission_policy: always_ask
+    configs:
+      read:
+        permission_policy: always_allow
+      grep:
+        permission_policy: always_allow
+description: Secondary example agent used by the threaded dashboard seed data.
+metadata:
+  example: quickstart
+  workflow: delegate-review

@@ -1,0 +1,14 @@
+{
+  "name": "Restricted Demo Sandbox",
+  "description": "Default local environment template used throughout the OSS quickstart.",
+  "config": {
+    "type": "cloud",
+    "networking": {
+      "type": "restricted"
+    }
+  },
+  "metadata": {
+    "example": "quickstart",
+    "network": "restricted"
+  }
+}

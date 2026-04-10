@@ -1,0 +1,27 @@
+name: Release Coordinator
+model:
+  id: claude-opus-4-6
+  speed: fast
+system: |
+  Coordinate release readiness across source code, docs, and issue tracker context.
+  Escalate any missing detail that would block a release.
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      permission_policy: always_ask
+    configs:
+      read:
+        permission_policy: always_allow
+      grep:
+        permission_policy: always_allow
+  - type: mcp_toolset
+    mcp_server_name: linear
+    permission_policy: always_ask
+mcp_servers:
+  - type: url
+    name: linear
+    url: https://mcp.linear.app/mcp
+description: Demonstrates an MCP-connected agent definition for local OSS testing.
+metadata:
+  example: quickstart
+  workflow: mcp-release

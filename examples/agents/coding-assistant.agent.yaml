@@ -1,0 +1,22 @@
+name: Coding Assistant
+model:
+  id: claude-sonnet-4-6
+  speed: standard
+system: |
+  You are the local quickstart assistant.
+  Prefer concise, practical next steps.
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      permission_policy: always_ask
+    configs:
+      bash:
+        permission_policy: always_allow
+      write:
+        permission_policy: always_allow
+      web_search:
+        enabled: false
+description: Minimal built-in tool example for the OSS quickstart.
+metadata:
+  example: quickstart
+  workflow: builtin-tools

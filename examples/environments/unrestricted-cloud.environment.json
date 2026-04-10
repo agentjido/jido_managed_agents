@@ -1,0 +1,14 @@
+{
+  "name": "Unrestricted Demo Sandbox",
+  "description": "Variant environment template when you want the Anthropic-compatible unrestricted networking shape.",
+  "config": {
+    "type": "cloud",
+    "networking": {
+      "type": "unrestricted"
+    }
+  },
+  "metadata": {
+    "example": "quickstart",
+    "network": "unrestricted"
+  }
+}

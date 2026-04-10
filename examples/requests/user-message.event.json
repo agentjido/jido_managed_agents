@@ -1,0 +1,9 @@
+{
+  "type": "user.message",
+  "content": [
+    {
+      "type": "text",
+      "text": "Inspect the repository status and summarize the next step."
+    }
+  ]
+}
