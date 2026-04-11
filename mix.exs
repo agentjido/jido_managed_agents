@@ -46,24 +46,7 @@ defmodule JidoManagedAgents.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:bcrypt_elixir, "~> 3.0"},
-      {:usage_rules, "~> 1.0", only: [:dev]},
-      {:picosat_elixir, "~> 0.2"},
-      {:daisy_ui_components, "~> 0.9"},
-      {:ash_authentication_phoenix, "~> 2.0"},
-      {:ash_authentication, "~> 4.0"},
-      {:open_api_spex, "~> 3.0"},
-      {:ash_postgres, "~> 2.0"},
-      {:ash_json_api, "~> 1.0"},
-      {:ash_jido,
-       git: "https://github.com/agentjido/ash_jido.git",
-       ref: "bdbb02e5de31e8c971baa5b20ab01f826be8b790"},
-      {:sourceror, "~> 1.8", only: [:dev, :test]},
-      {:ash_phoenix, "~> 2.0"},
-      {:ash, "~> 3.0"},
-      {:ash_cloak, "~> 0.2.0"},
-      {:cloak, "~> 1.1"},
-      {:igniter, "~> 0.7", only: [:dev, :test]},
+      # Jido - Agent framework core
       {:jido, "~> 2.2", override: true},
       {:jido_action,
        git: "https://github.com/agentjido/jido_action.git",
@@ -76,15 +59,37 @@ defmodule JidoManagedAgents.MixProject do
       {:jido_workspace,
        git: "https://github.com/agentjido/jido_workspace.git",
        ref: "d01bf67e4911fad06a379b41b8e9f74966d73310"},
+
+      # Ash Framework
+      {:ash, "~> 3.0"},
+      {:ash_authentication, "~> 4.0"},
+      {:ash_authentication_phoenix, "~> 2.0"},
+      {:ash_cloak, "~> 0.2.0"},
+      {:ash_jido,
+       git: "https://github.com/agentjido/ash_jido.git",
+       ref: "bdbb02e5de31e8c971baa5b20ab01f826be8b790"},
+      {:ash_json_api, "~> 1.0"},
+      {:ash_phoenix, "~> 2.0"},
+      {:ash_postgres, "~> 2.0"},
+
+      # Phoenix
       {:phoenix, "~> 1.8.5"},
       {:phoenix_ecto, "~> 4.5"},
-      {:ecto_sql, "~> 3.13"},
-      {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.1"},
+      {:phoenix_live_dashboard, "~> 0.8.3"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:bandit, "~> 1.5"},
+
+      # Database
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, ">= 0.0.0"},
+
+      # Security & encryption
+      {:bcrypt_elixir, "~> 3.0"},
+      {:cloak, "~> 1.1"},
+
+      # Frontend assets & UI
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,
@@ -94,14 +99,30 @@ defmodule JidoManagedAgents.MixProject do
        app: false,
        compile: false,
        depth: 1},
+      {:daisy_ui_components, "~> 0.9"},
+
+      # Email
       {:swoosh, "~> 1.16"},
+
+      # HTTP & API
       {:req, "~> 0.5"},
+      {:open_api_spex, "~> 3.0"},
+
+      # Telemetry & observability
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
+
+      # Utilities
+      {:dns_cluster, "~> 0.2.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:picosat_elixir, "~> 0.2"},
+
+      # Dev & test tooling
+      {:igniter, "~> 0.7", only: [:dev, :test]},
+      {:lazy_html, ">= 0.1.0", only: :test},
+      {:sourceror, "~> 1.8", only: [:dev, :test]},
+      {:usage_rules, "~> 1.0", only: [:dev]}
     ]
   end
 
