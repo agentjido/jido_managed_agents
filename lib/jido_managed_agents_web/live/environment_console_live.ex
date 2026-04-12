@@ -20,6 +20,7 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
       |> assign_new(:current_scope, fn -> nil end)
       |> assign(:page_title, "Environments")
       |> assign(:environments, environments)
+      |> assign(:environment_filter, "all")
       |> assign(:selected_environment, nil)
       |> assign(:environment_errors, [])
       |> assign_environment_form(default_environment_params())
@@ -65,6 +66,11 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
   @impl true
   def handle_event("validate_environment", %{"environment" => params}, socket) do
     {:noreply, assign_environment_form(socket, params)}
+  end
+
+  def handle_event("set_filter", %{"filter" => filter}, socket)
+      when filter in ["all", "active", "archived"] do
+    {:noreply, assign(socket, :environment_filter, filter)}
   end
 
   def handle_event("save_environment", %{"environment" => params}, socket) do
@@ -118,207 +124,161 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      main_class="px-4 py-8 sm:px-6 lg:px-8"
-      container_class="mx-auto max-w-7xl space-y-8"
+      section={:environments}
+      main_class="px-4 py-6 sm:px-6 lg:px-8"
+      container_class="mx-auto max-w-7xl space-y-6"
     >
-      <section class="overflow-hidden rounded-[2rem] border border-emerald-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_40%),linear-gradient(135deg,_#052e2b,_#0f172a_58%,_#134e4a)] text-white shadow-2xl shadow-emerald-950/20">
-        <div class="grid gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:px-10">
-          <div class="space-y-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-              Resource Templates
-            </p>
-            <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Environments
-            </h1>
-            <p class="max-w-2xl text-sm leading-6 text-emerald-50/80">
-              Define reusable runtime templates, keep networking explicit, and archive old configurations without losing the audit trail for past sessions.
-            </p>
-            <div class="flex flex-wrap gap-3 pt-2">
-              <.console_tab navigate={~p"/console/agents/new"} label="Agents" />
-              <.console_tab active label="Environments" />
-              <.console_tab navigate={~p"/console/vaults"} label="Vaults" />
-            </div>
+      <.page_header
+        title="Environments"
+        description="Manage reusable runtime templates for agent sessions."
+      />
+
+      <div class="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+        <span>{active_environment_count(@environments)} active</span>
+        <span class="text-[var(--border-strong)]">·</span>
+        <span>{archived_environment_count(@environments)} archived</span>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-5">
+        <section class="space-y-3 lg:col-span-2">
+          <div class="flex items-center gap-2">
+            <button
+              :for={filter <- environment_filters()}
+              type="button"
+              phx-click="set_filter"
+              phx-value-filter={filter.value}
+              class={[
+                "console-button px-3 text-xs",
+                if(@environment_filter == filter.value,
+                  do: "console-button-primary",
+                  else: "console-button-secondary"
+                )
+              ]}
+            >
+              {filter.label}
+            </button>
+
+            <.link
+              patch={~p"/console/environments"}
+              class="console-button console-button-ghost ml-auto px-3 text-xs"
+            >
+              <.icon name="hero-plus" class="size-3" /> New
+            </.link>
           </div>
-          <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-emerald-50/90 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <.metric_card label="Active" value={active_environment_count(@environments)} />
-            <.metric_card label="Archived" value={archived_environment_count(@environments)} />
-            <.metric_card
-              label="Open Network"
-              value={unrestricted_environment_count(@environments)}
+
+          <div :if={filtered_environments(@environments, @environment_filter) == []}>
+            <.empty_state
+              title="No environments"
+              description="Create a template or widen the filter."
             />
           </div>
-        </div>
-      </section>
 
-      <div class="grid gap-8 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
-                Catalog
-              </p>
-              <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                Saved environments
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-neutral-600">
-                Templates stay reusable across sessions. Archived templates remain visible but read-only.
-              </p>
-            </div>
-            <.button
-              patch={~p"/console/environments"}
-              class="rounded-full bg-neutral-900 px-5 text-white hover:bg-neutral-800"
-            >
-              New template
-            </.button>
-          </div>
+          <.link
+            :for={environment <- filtered_environments(@environments, @environment_filter)}
+            id={"environment-card-#{environment.id}"}
+            patch={~p"/console/environments/#{environment.id}/edit"}
+            class={[
+              "block rounded-[8px] border p-4 text-left transition min-h-[56px]",
+              selected_environment?(@selected_environment, environment) &&
+                "border-[var(--session)]/40 bg-[var(--session-soft)]",
+              !selected_environment?(@selected_environment, environment) &&
+                "border-[var(--border-subtle)] bg-[var(--panel-bg)] hover:bg-[var(--panel-muted)]"
+            ]}
+          >
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 inline-flex shrink-0 text-[var(--session)]">
+                <.icon name="hero-server-stack" class="size-4" />
+              </span>
 
-          <div id="environment-list" class="mt-6 space-y-6">
-            <div
-              :if={active_environments(@environments) == []}
-              class="rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500"
-            >
-              No environments yet. Create the first template on the right.
-            </div>
-
-            <div :if={active_environments(@environments) != []} class="space-y-3">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                Active
-              </p>
-              <div
-                :for={environment <- active_environments(@environments)}
-                class={environment_card_class(environment, @selected_environment)}
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <p class="text-base font-semibold text-neutral-950">{environment.name}</p>
-                      <span class={networking_badge_class(environment)}>
-                        {networking_label(environment)}
-                      </span>
-                    </div>
-                    <p class="text-sm leading-6 text-neutral-600">
-                      {environment.description || "No description yet."}
-                    </p>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      Updated {ConsoleHelpers.format_timestamp(environment.updated_at)}
-                    </p>
-                  </div>
-                  <.button
-                    patch={~p"/console/environments/#{environment.id}/edit"}
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-800 hover:border-emerald-300 hover:bg-emerald-50"
-                  >
-                    Edit
-                  </.button>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-medium text-[var(--text-strong)]">{environment.name}</p>
+                  <.status_badge :if={environment.archived_at} status="archived" size="small" />
                 </div>
+
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <.status_badge status={networking_label(environment)} size="small" />
+                  <span class="text-[10px] text-[var(--text-muted)]">
+                    {ConsoleHelpers.format_timestamp(environment.updated_at)}
+                  </span>
+                </div>
+
+                <p :if={environment.description} class="mt-1 text-xs text-[var(--text-muted)]">
+                  {environment.description}
+                </p>
               </div>
             </div>
-
-            <div :if={archived_environments(@environments) != []} class="space-y-3">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                Archived
-              </p>
-              <div
-                :for={environment <- archived_environments(@environments)}
-                class={environment_card_class(environment, @selected_environment)}
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <p class="text-base font-semibold text-neutral-950">{environment.name}</p>
-                      <span class="inline-flex items-center rounded-full bg-neutral-900 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white">
-                        Archived
-                      </span>
-                    </div>
-                    <p class="text-sm leading-6 text-neutral-600">
-                      {environment.description || "No description yet."}
-                    </p>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      Archived {ConsoleHelpers.format_timestamp(environment.archived_at)}
-                    </p>
-                  </div>
-                  <.button
-                    patch={~p"/console/environments/#{environment.id}/edit"}
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
-                  >
-                    View
-                  </.button>
-                </div>
-              </div>
-            </div>
-          </div>
+          </.link>
         </section>
 
-        <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
-                Editor
-              </p>
-              <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                {environment_form_title(@selected_environment)}
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-neutral-600">
-                Environments always target the cloud runtime contract. The only mutable runtime switch in v1 is networking.
-              </p>
-            </div>
+        <section class="lg:col-span-3">
+          <div class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-5 space-y-4">
             <div
-              :if={@selected_environment}
-              class="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600"
+              :if={@selected_environment && @selected_environment.archived_at}
+              id="environment-read-only-note"
+              class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] px-3 py-2 text-xs text-[var(--text-muted)]"
             >
-              <p class="font-medium text-neutral-900">Template ID</p>
-              <p class="mt-1 font-mono text-xs">{@selected_environment.id}</p>
+              This environment is archived and read-only.
             </div>
-          </div>
 
-          <div
-            :if={@selected_environment && @selected_environment.archived_at}
-            id="environment-read-only-note"
-            class="mt-6 rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950"
-          >
-            This environment is archived. The saved template stays available for historical sessions, but edits are locked.
-          </div>
+            <h2 class="text-sm font-semibold text-[var(--text-strong)]">
+              {if @selected_environment do
+                if @selected_environment.archived_at,
+                  do: @environment_form_params["name"],
+                  else: "Edit: #{@environment_form_params["name"]}"
+              else
+                "New Environment"
+              end}
+            </h2>
 
-          <div
-            :if={@environment_errors != []}
-            id="environment-error-list"
-            class="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900"
-          >
-            <p class="font-semibold">Environment could not be saved.</p>
-            <p :for={error <- @environment_errors} class="mt-2">{error}</p>
-          </div>
+            <div
+              :if={@environment_errors != []}
+              id="environment-error-list"
+              class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--text-strong)]"
+            >
+              <p :for={error <- @environment_errors}>{error}</p>
+            </div>
 
-          <.form
-            for={@environment_form}
-            id="environment-form"
-            class="mt-6 space-y-6"
-            phx-change="validate_environment"
-            phx-submit="save_environment"
-          >
-            <div class="grid gap-5 md:grid-cols-2">
-              <.input
-                field={@environment_form[:name]}
-                label="Environment name"
-                placeholder="quickstart-env"
-                disabled={environment_read_only?(@selected_environment)}
-              />
-              <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 px-4 py-3">
-                <p class="text-sm font-medium text-neutral-900">Runtime type</p>
-                <p class="mt-2 inline-flex items-center rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white">
-                  cloud
-                </p>
-                <p class="mt-3 text-sm leading-6 text-neutral-600">
-                  Anthropic-compatible container templates map to the `cloud` contract in v1.
-                </p>
+            <.form
+              for={@environment_form}
+              id="environment-form"
+              class="space-y-4"
+              phx-change="validate_environment"
+              phx-submit="save_environment"
+            >
+              <div>
+                <.input
+                  field={@environment_form[:name]}
+                  label="Name"
+                  placeholder="Environment name"
+                  disabled={environment_read_only?(@selected_environment)}
+                />
               </div>
-              <.input
-                field={@environment_form[:description]}
-                type="textarea"
-                label="Description"
-                rows="4"
-                placeholder="Reusable runtime for internal assistants."
-                disabled={environment_read_only?(@selected_environment)}
-              />
-              <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
+
+              <div>
+                <.input
+                  field={@environment_form[:description]}
+                  type="textarea"
+                  label="Description"
+                  rows="2"
+                  placeholder="What is this environment for?"
+                  disabled={environment_read_only?(@selected_environment)}
+                />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-sm font-medium leading-6 text-zinc-950 dark:text-zinc-100">
+                  Runtime Type
+                </label>
+                <input
+                  type="text"
+                  value="cloud"
+                  disabled
+                  class="mt-1 block w-full rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] px-3 py-2.5 text-sm text-[var(--text-muted)] outline-none"
+                />
+              </div>
+
+              <div>
                 <.input
                   field={@environment_form[:networking_type]}
                   type="select"
@@ -326,95 +286,48 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
                   options={networking_options()}
                   disabled={environment_read_only?(@selected_environment)}
                 />
-                <p class="mt-3 text-sm leading-6 text-neutral-600">
-                  Restricted keeps network access narrow. Unrestricted is best for agents that need open third-party APIs.
+                <p class="mt-1.5 text-[11px] text-[var(--text-muted)]">
+                  <%= if @environment_form_params["networking_type"] == "restricted" do %>
+                    No outbound network. Safe for untrusted configs.
+                  <% else %>
+                    Full outbound access. Use with trusted configs only.
+                  <% end %>
                 </p>
               </div>
-            </div>
 
-            <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
-              <.input
-                field={@environment_form[:metadata_json]}
-                type="textarea"
-                label="Metadata JSON"
-                rows="8"
-                placeholder={"{\n  \"team\": \"platform\"\n}"}
-                disabled={environment_read_only?(@selected_environment)}
-              />
-              <p class="mt-2 text-sm leading-6 text-neutral-500">
-                Optional JSON for labels and downstream routing. The editor expects an object.
-              </p>
-            </div>
+              <div>
+                <.input
+                  field={@environment_form[:metadata_json]}
+                  type="textarea"
+                  label="Metadata JSON"
+                  rows="3"
+                  disabled={environment_read_only?(@selected_environment)}
+                />
+              </div>
 
-            <div class="flex flex-wrap gap-3">
-              <.button
-                id="environment-save-button"
-                class="rounded-full bg-emerald-600 px-5 text-white hover:bg-emerald-500 disabled:border disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
-                disabled={environment_read_only?(@selected_environment)}
-              >
-                {environment_submit_label(@selected_environment)}
-              </.button>
-              <button
-                :if={@selected_environment && !@selected_environment.archived_at}
-                id="environment-archive-button"
-                type="button"
-                phx-click="archive_environment"
-                class="rounded-full border border-amber-200 bg-amber-50 px-5 py-2 text-sm font-medium text-amber-950 transition hover:bg-amber-100"
-              >
-                Archive
-              </button>
-              <.button
-                :if={@selected_environment}
-                patch={~p"/console/environments"}
-                class="rounded-full border border-neutral-300 bg-white px-5 text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
-              >
-                Start new template
-              </.button>
-            </div>
-          </.form>
+              <div :if={!environment_read_only?(@selected_environment)} class="flex flex-wrap gap-2">
+                <.button
+                  id="environment-save-button"
+                  class="console-button console-button-primary"
+                >
+                  {if @selected_environment, do: "Save Template", else: "Create Template"}
+                </.button>
+
+                <button
+                  :if={@selected_environment}
+                  id="environment-archive-button"
+                  type="button"
+                  phx-click="archive_environment"
+                  class="console-button console-button-secondary"
+                >
+                  Archive
+                </button>
+              </div>
+            </.form>
+          </div>
         </section>
       </div>
     </Layouts.app>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :value, :integer, required: true
-
-  defp metric_card(assigns) do
-    ~H"""
-    <div>
-      <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/70">{@label}</p>
-      <p class="mt-2 text-3xl font-semibold tracking-tight">{@value}</p>
-    </div>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :active, :boolean, default: false
-  attr :navigate, :string, default: nil
-
-  defp console_tab(%{navigate: nil} = assigns) do
-    ~H"""
-    <span class="inline-flex items-center rounded-full border border-white/15 bg-white/12 px-4 py-2 text-sm font-medium text-white">
-      {@label}
-    </span>
-    """
-  end
-
-  defp console_tab(assigns) do
-    ~H"""
-    <.link
-      navigate={@navigate}
-      class={[
-        "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition",
-        @active && "border border-white/15 bg-white/12 text-white",
-        !@active &&
-          "border border-white/10 bg-black/10 text-white/75 hover:bg-white/10 hover:text-white"
-      ]}
-    >
-      {@label}
-    </.link>
     """
   end
 
@@ -543,46 +456,16 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
     Enum.filter(environments, &match?(%DateTime{}, &1.archived_at))
   end
 
+  defp filtered_environments(environments, "active"), do: active_environments(environments)
+  defp filtered_environments(environments, "archived"), do: archived_environments(environments)
+  defp filtered_environments(environments, _filter), do: environments
+
   defp active_environment_count(environments), do: length(active_environments(environments))
   defp archived_environment_count(environments), do: length(archived_environments(environments))
-
-  defp unrestricted_environment_count(environments) do
-    environments
-    |> active_environments()
-    |> Enum.count(&(networking_label(&1) == "unrestricted"))
-  end
 
   defp networking_label(environment) do
     get_in(environment.config || %{}, ["networking", "type"]) || "restricted"
   end
-
-  defp networking_badge_class(environment) do
-    case networking_label(environment) do
-      "unrestricted" ->
-        "inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-emerald-900"
-
-      _other ->
-        "inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sky-900"
-    end
-  end
-
-  defp environment_card_class(environment, selected_environment) do
-    selected? = selected_environment && selected_environment.id == environment.id
-
-    [
-      "rounded-[1.5rem] border p-4 transition",
-      if(selected?,
-        do: "border-emerald-300 bg-emerald-50/70 shadow-sm shadow-emerald-100",
-        else: "border-neutral-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"
-      )
-    ]
-  end
-
-  defp environment_form_title(nil), do: "Create environment"
-  defp environment_form_title(_environment), do: "Edit environment"
-
-  defp environment_submit_label(nil), do: "Create environment"
-  defp environment_submit_label(_environment), do: "Save environment"
 
   defp environment_saved_message(nil), do: "Environment created."
   defp environment_saved_message(_environment), do: "Environment updated."
@@ -591,10 +474,22 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
   defp environment_read_only?(%Environment{archived_at: %DateTime{}}), do: true
   defp environment_read_only?(%Environment{}), do: false
 
+  defp selected_environment?(nil, _environment), do: false
+  defp selected_environment?(%Environment{id: id}, %Environment{id: id}), do: true
+  defp selected_environment?(_selected, _environment), do: false
+
   defp networking_options do
     [
       {"Restricted", "restricted"},
       {"Unrestricted", "unrestricted"}
+    ]
+  end
+
+  defp environment_filters do
+    [
+      %{label: "All", value: "all"},
+      %{label: "Active", value: "active"},
+      %{label: "Archived", value: "archived"}
     ]
   end
 end

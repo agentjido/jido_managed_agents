@@ -58,4 +58,89 @@ defmodule JidoManagedAgentsWeb.ConsoleHelpers do
   def format_timestamp(%DateTime{} = timestamp) do
     Calendar.strftime(timestamp, "%Y-%m-%d %H:%M UTC")
   end
+
+  def short_id(nil), do: "unknown"
+  def short_id(id) when is_binary(id), do: String.slice(id, 0, 8)
+
+  def status_label(status) when is_atom(status),
+    do: status |> Atom.to_string() |> String.capitalize()
+
+  def status_label(status) when is_binary(status), do: String.capitalize(status)
+  def status_label(_status), do: "Unknown"
+
+  def truthy?(value), do: value in [true, "true", 1, "1"]
+
+  def requires_action?(stop_reason), do: requires_action_event_ids(stop_reason) != []
+
+  def requires_action_event_ids(%{} = stop_reason) do
+    if payload_value(stop_reason, "type") == "requires_action" do
+      stop_reason
+      |> payload_value("event_ids")
+      |> List.wrap()
+      |> Enum.filter(&is_binary/1)
+    else
+      []
+    end
+  end
+
+  def requires_action_event_ids(_stop_reason), do: []
+
+  def payload_value(payload, key) when is_map(payload) do
+    Map.get(payload, key) || existing_atom_value(payload, key)
+  rescue
+    ArgumentError -> Map.get(payload, key)
+  end
+
+  def payload_value(_payload, _key), do: nil
+
+  def text_content(content) when is_list(content) do
+    content
+    |> Enum.map(fn
+      %{"text" => text} when is_binary(text) -> text
+      %{text: text} when is_binary(text) -> text
+      _other -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
+    |> String.trim()
+  end
+
+  def text_content(_content), do: ""
+
+  def pretty_data(nil), do: "(none)"
+  def pretty_data(value) when is_binary(value), do: value
+
+  def pretty_data(value) when is_map(value) or is_list(value) do
+    Jason.encode!(value, pretty: true)
+  end
+
+  def pretty_data(value), do: inspect(value, pretty: true)
+
+  def session_model(%{agent_version: %{model: model}}) when is_map(model) do
+    payload_value(model, "id") || payload_value(model, "model_id") || "Unknown model"
+  end
+
+  def session_model(_session), do: "Unknown model"
+
+  def agent_model(%{model: model}) when is_map(model) do
+    payload_value(model, "id") || payload_value(model, "model_id") || "Unknown model"
+  end
+
+  def agent_model(%{latest_version: %{model: model}}) when is_map(model) do
+    payload_value(model, "id") || payload_value(model, "model_id") || "Unknown model"
+  end
+
+  def agent_model(_agent), do: "Unknown model"
+
+  def networking_label(%{config: config}) when is_map(config) do
+    get_in(config, ["networking", "type"]) || get_in(config, [:networking, :type]) || "restricted"
+  end
+
+  def networking_label(_environment), do: "restricted"
+
+  defp existing_atom_value(payload, key) do
+    key
+    |> String.to_existing_atom()
+    |> then(&Map.get(payload, &1))
+  end
 end

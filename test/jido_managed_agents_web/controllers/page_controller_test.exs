@@ -5,8 +5,11 @@ defmodule JidoManagedAgentsWeb.PageControllerTest do
     conn = get(conn, ~p"/")
     html = html_response(conn, 200)
 
-    assert html =~ "Build, run, and inspect managed agents without losing the thread."
-    assert html =~ "Open source control plane for agent execution"
+    assert html =~ "Open-source control plane for managed AI agents"
+
+    assert html =~
+             "Author versioned agents, attach tools and MCP servers, isolate runtimes with environment templates"
+
     assert html =~ "Create Account"
   end
 end

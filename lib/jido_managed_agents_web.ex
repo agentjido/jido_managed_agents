@@ -88,6 +88,7 @@ defmodule JidoManagedAgentsWeb do
       use DaisyUIComponents, core_components: false
       # Core UI components
       import JidoManagedAgentsWeb.CoreComponents
+      import JidoManagedAgentsWeb.ConsoleComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

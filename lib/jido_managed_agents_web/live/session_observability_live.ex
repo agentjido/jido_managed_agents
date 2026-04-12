@@ -28,18 +28,31 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
      socket
      |> assign_new(:current_scope, fn -> nil end)
      |> assign(:page_title, "Sessions")
+     |> assign(:all_sessions, [])
      |> assign(:sessions, [])
+     |> assign(:session_filters, default_session_filters())
+     |> assign(:session_filter_form, to_form(default_session_filters(), as: :filters))
+     |> assign(:view_tab, "transcript")
+     |> assign(:debug_tab, "timeline")
+     |> assign(:selected_event_id, nil)
+     |> assign(:composer_params, default_composer_params())
+     |> assign(:composer_form, to_form(default_composer_params(), as: :composer))
+     |> assign(:pending_count, 0)
      |> assign_detail(nil, nil)}
   end
 
   @impl true
   def handle_params(_params, _uri, %{assigns: %{live_action: :index}} = socket) do
     actor = socket.assigns.current_user
+    sessions = list_sessions(actor)
+    filters = socket.assigns.session_filters
 
     {:noreply,
      socket
      |> assign(:page_title, "Sessions")
-     |> assign(:sessions, list_sessions(actor))
+     |> assign(:all_sessions, sessions)
+     |> assign(:sessions, filter_sessions(sessions, filters))
+     |> assign(:pending_count, count_requires_action(sessions))
      |> assign_detail(nil, nil)}
   end
 
@@ -52,7 +65,12 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
         {:noreply,
          socket
          |> assign(:page_title, detail_title(detail.session))
+         |> assign(:pending_count, pending_session_count(actor))
          |> assign(:sessions, [])
+         |> assign(:all_sessions, [])
+         |> assign(:selected_event_id, nil)
+         |> assign(:composer_params, default_composer_params())
+         |> assign(:composer_form, to_form(default_composer_params(), as: :composer))
          |> assign_detail(detail, selected_thread_id)}
 
       {:error, :invalid_thread} ->
@@ -113,457 +131,873 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
 
   def handle_event("confirm_tool", _params, socket), do: {:noreply, socket}
 
+  def handle_event("filter_sessions", %{"filters" => params}, socket) do
+    filters = normalize_session_filters(params)
+
+    {:noreply,
+     socket
+     |> assign(:session_filters, filters)
+     |> assign(:session_filter_form, to_form(filters, as: :filters))
+     |> assign(:sessions, filter_sessions(socket.assigns.all_sessions, filters))}
+  end
+
+  def handle_event("set_view", %{"view" => view}, socket) when view in ["transcript", "debug"] do
+    {:noreply, assign(socket, :view_tab, view)}
+  end
+
+  def handle_event("set_debug_tab", %{"tab" => tab}, socket)
+      when tab in ["timeline", "tools", "metrics", "raw"] do
+    {:noreply, assign(socket, :debug_tab, tab)}
+  end
+
+  def handle_event("select_event", %{"id" => event_id}, socket) do
+    next_id = if socket.assigns.selected_event_id == event_id, do: nil, else: event_id
+    {:noreply, assign(socket, :selected_event_id, next_id)}
+  end
+
+  def handle_event("validate_composer", %{"composer" => params}, socket) do
+    params = normalize_composer_params(params)
+
+    {:noreply,
+     socket
+     |> assign(:composer_params, params)
+     |> assign(:composer_form, to_form(params, as: :composer))}
+  end
+
+  def handle_event(
+        "send_message",
+        %{"composer" => params},
+        %{assigns: %{session: %Session{} = session}} = socket
+      ) do
+    actor = socket.assigns.current_user
+    params = normalize_composer_params(params)
+
+    with message when message != "" <- String.trim(params["prompt"]),
+         {:ok, events} <- normalized_user_message(message, session, actor),
+         {:ok, _appended_events} <- SessionEventLog.append_user_events(session, events, actor),
+         {:ok, _run_result} <- safe_run_session(session.id, actor),
+         {:ok, refreshed_detail} <-
+           load_detail(session.id, socket.assigns.selected_thread_id, actor) do
+      {:noreply,
+       socket
+       |> assign(:page_title, detail_title(refreshed_detail.session))
+       |> assign(:composer_params, default_composer_params())
+       |> assign(:composer_form, to_form(default_composer_params(), as: :composer))
+       |> assign(:pending_count, pending_session_count(actor))
+       |> assign_detail(refreshed_detail, socket.assigns.selected_thread_id)}
+    else
+      "" ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Enter a message before sending.")
+         |> assign(:composer_params, params)
+         |> assign(:composer_form, to_form(params, as: :composer))}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, ConsoleHelpers.error_message(error))}
+    end
+  end
+
+  def handle_event("send_message", _params, socket), do: {:noreply, socket}
+
   @impl true
   def render(assigns) do
+    assigns =
+      assigns
+      |> assign(
+        :selected_event,
+        selected_event(assigns.display_events, assigns.selected_event_id)
+      )
+      |> assign(:can_compose, session_composable?(assigns[:session]))
+
     ~H"""
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      main_class="px-4 py-8 sm:px-6 lg:px-8"
-      container_class="mx-auto max-w-7xl space-y-8"
+      section={:sessions}
+      pending_count={@pending_count}
     >
       <%= if @live_action == :index do %>
-        <section class="overflow-hidden rounded-[2rem] border border-amber-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.18),_transparent_38%),linear-gradient(135deg,_#111827,_#172554_58%,_#1f2937)] text-white shadow-2xl shadow-amber-950/20">
-          <div class="grid gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)] lg:px-10">
-            <div class="space-y-4">
-              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200">
-                Session Observability
-              </p>
-              <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                Sessions
-              </h1>
-              <p class="max-w-2xl text-sm leading-6 text-amber-50/80">
-                Inspect recent runs without leaving the dashboard. Trace the exact event stream, provider usage, tool activity, and any blocked approvals before you touch the database.
-              </p>
-              <div class="flex flex-wrap gap-3 pt-2">
-                <.console_tab navigate={~p"/console/agents/new"} label="Agents" />
-                <.console_tab navigate={~p"/console/environments"} label="Environments" />
-                <.console_tab navigate={~p"/console/vaults"} label="Vaults" />
-                <.console_tab navigate={nil} label="Sessions" />
-              </div>
-            </div>
-            <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-amber-50/90 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <.metric_card label="Sessions" value={length(@sessions)} />
-              <.metric_card label="Running" value={count_sessions(@sessions, "running")} />
-              <.metric_card label="Needs Input" value={count_requires_action(@sessions)} />
-            </div>
-          </div>
+        <.page_header
+          title="Sessions"
+          description="Browse active traces, filter down to the runs that need attention, and open a transcript-first detail view when you need to interact with the agent."
+        >
+          <:actions>
+            <.link navigate={~p"/console/agents"} class="console-button console-button-secondary">
+              <.icon name="hero-cpu-chip" class="size-4" /> Agents
+            </.link>
+          </:actions>
+        </.page_header>
+
+        <section class="console-grid-3">
+          <.kpi_card
+            label="Sessions"
+            value={Integer.to_string(length(@all_sessions))}
+            icon="hero-bolt"
+          />
+          <.kpi_card
+            label="Running"
+            value={Integer.to_string(count_sessions(@all_sessions, "running"))}
+            icon="hero-play"
+            accent="text-[var(--session)]"
+          />
+          <.kpi_card
+            label="Needs Input"
+            value={Integer.to_string(count_requires_action(@all_sessions))}
+            icon="hero-exclamation-circle"
+            accent={
+              if(count_requires_action(@all_sessions) > 0, do: "text-[var(--accent)]", else: nil)
+            }
+          />
         </section>
 
-        <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">
-                Session List
-              </p>
-              <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                Recent traces
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-neutral-600">
-                Status, model selection, and agent ownership stay visible at a glance so you can jump straight to the session that needs attention.
-              </p>
-            </div>
-          </div>
-
-          <div
-            :if={@sessions == []}
-            class="mt-6 rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500"
+        <section class="console-panel space-y-4">
+          <.form
+            for={@session_filter_form}
+            id="session-filters"
+            class="flex flex-col gap-3 md:flex-row md:items-center"
+            phx-change="filter_sessions"
           >
-            No sessions yet. Launch a run from the agent builder to start collecting traces.
+            <div class="relative min-w-0 flex-1">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]">
+                <.icon name="hero-magnifying-glass" class="size-4" />
+              </span>
+              <input
+                type="text"
+                name="filters[search]"
+                value={@session_filters["search"]}
+                placeholder="Search sessions"
+                class="w-full rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] px-10 py-3 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--border-strong)]"
+              />
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                :for={filter <- session_status_filters()}
+                type="submit"
+                name="filters[status]"
+                value={filter.value}
+                class={[
+                  "console-button",
+                  if(@session_filters["status"] == filter.value,
+                    do: "console-button-primary",
+                    else: "console-button-secondary"
+                  )
+                ]}
+              >
+                {filter.label}
+              </button>
+            </div>
+          </.form>
+        </section>
+
+        <section class="space-y-3">
+          <div :if={@sessions == []}>
+            <.empty_state
+              title="No sessions matched"
+              description="Adjust the status filter or search term to widen the result set."
+            />
           </div>
 
-          <div :if={@sessions != []} id="session-list" class="mt-6 space-y-4">
-            <.link
-              :for={session <- @sessions}
-              id={"session-card-#{session.id}"}
-              navigate={~p"/console/sessions/#{session.id}"}
-              class="block rounded-[1.5rem] border border-neutral-200 bg-neutral-50/80 p-5 transition hover:border-amber-300 hover:bg-amber-50/60"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="space-y-3">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="text-base font-semibold text-neutral-950">
-                      {session.title || short_id(session.id)}
-                    </p>
-                    <span class={status_badge_class(session.status)}>
-                      {status_label(session.status)}
-                    </span>
-                    <span
-                      :if={requires_action?(session.stop_reason)}
-                      class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-amber-900"
-                    >
-                      Needs input
-                    </span>
-                  </div>
-                  <div class="grid gap-3 text-sm text-neutral-600 sm:grid-cols-2 xl:grid-cols-4">
-                    <p>
-                      <span class="font-medium text-neutral-900">Agent:</span>
-                      {session_agent_name(session)}
-                    </p>
-                    <p>
-                      <span class="font-medium text-neutral-900">Model:</span>
-                      {session_model(session)}
-                    </p>
-                    <p>
-                      <span class="font-medium text-neutral-900">Created:</span>
-                      {ConsoleHelpers.format_timestamp(session.created_at)}
-                    </p>
-                    <p>
-                      <span class="font-medium text-neutral-900">Trace:</span>
-                      {thread_summary(session)}
-                    </p>
-                  </div>
+          <.link
+            :for={session <- @sessions}
+            navigate={~p"/console/sessions/#{session.id}"}
+            id={"session-card-#{session.id}"}
+            class="console-list-link"
+          >
+            <div class="console-list-row">
+              <div class="min-w-0 space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="truncate text-sm font-semibold text-[var(--text-strong)]">
+                    {detail_title(session)}
+                  </p>
+                  <.status_badge status={session_status_badge(session)} />
                 </div>
-                <div class="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700">
-                  Inspect <.icon name="hero-arrow-right" class="size-4" />
-                </div>
+                <p class="console-copy">
+                  {session_agent_name(session)} · {session_model(session)} · {thread_summary(session)}
+                </p>
+                <p class="console-list-meta">
+                  {ConsoleHelpers.format_timestamp(session.created_at)}
+                </p>
               </div>
-            </.link>
-          </div>
+              <.icon name="hero-chevron-right" class="mt-1 size-4 shrink-0 text-[var(--text-faint)]" />
+            </div>
+          </.link>
         </section>
       <% else %>
-        <section
-          id="session-detail"
-          class="overflow-hidden rounded-[2rem] border border-cyan-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_40%),linear-gradient(135deg,_#082f49,_#0f172a_56%,_#164e63)] text-white shadow-2xl shadow-cyan-950/20"
-        >
-          <div class="grid gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] lg:px-10">
-            <div class="space-y-4">
-              <div class="flex flex-wrap items-center gap-3">
+        <section class="console-panel space-y-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center gap-2">
                 <.link
                   navigate={~p"/console/sessions"}
-                  class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-cyan-50 transition hover:bg-white/15"
+                  class="console-button console-button-secondary"
                 >
-                  <.icon name="hero-arrow-left" class="size-4" /> Session list
+                  <.icon name="hero-arrow-left" class="size-4" /> Sessions
                 </.link>
-                <span class={detail_status_badge_class(@session.status)}>
-                  {status_label(@session.status)}
-                </span>
-                <span
-                  :if={@pending_confirmations != []}
-                  class="inline-flex items-center rounded-full bg-amber-300/90 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amber-950"
-                >
-                  Awaiting approval
-                </span>
+                <.status_badge status={session_status_badge(@session)} />
+                <.status_badge :if={@pending_confirmations != []} status="needs_input" />
               </div>
-              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
-                Trace Detail
-              </p>
-              <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                {detail_title(@session)}
-              </h1>
-              <p class="max-w-2xl text-sm leading-6 text-cyan-50/80">
-                Agent <span class="font-medium text-white">{session_agent_name(@session)}</span>
-                on model <span class="font-medium text-white">{session_model(@session)}</span>.
-                Created {ConsoleHelpers.format_timestamp(@session.created_at)}.
-              </p>
-              <div class="flex flex-wrap gap-3 pt-2 text-sm text-cyan-50/85">
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Trace scope: {@selected_trace_label}
-                </span>
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Events: {length(@display_events)}
-                </span>
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Threads: {length(@threads)}
-                </span>
+              <div>
+                <h1 class="console-title">{detail_title(@session)}</h1>
+                <p class="console-copy">
+                  {session_agent_name(@session)} · {session_model(@session)} · {ConsoleHelpers.format_timestamp(
+                    @session.created_at
+                  )}
+                </p>
               </div>
             </div>
-            <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-cyan-50/90 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <%= if @metrics do %>
-                <.metric_card label="Input Tokens" value={format_metric(@metrics["input_tokens"])} />
-                <.metric_card
-                  label="Output Tokens"
-                  value={format_metric(@metrics["output_tokens"])}
-                />
-                <.metric_card label="Total Tokens" value={format_metric(@metrics["total_tokens"])} />
-              <% else %>
-                <.metric_card label="Input Tokens" value="Unavailable" />
-                <.metric_card label="Output Tokens" value="Unavailable" />
-                <.metric_card label="Total Tokens" value="Unavailable" />
-              <% end %>
-            </div>
-          </div>
-        </section>
 
-        <section
-          id="thread-traces"
-          class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-                Trace Scope
-              </p>
-              <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                Thread traces
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-neutral-600">
-                Start with the aggregated session trace, then drill into one thread at a time when delegation is active.
-              </p>
+            <div class="console-grid-3 w-full max-w-xl">
+              <.kpi_card
+                label="Threads"
+                value={Integer.to_string(length(@threads))}
+                icon="hero-squares-2x2"
+              />
+              <.kpi_card
+                label="Events"
+                value={Integer.to_string(length(@display_events))}
+                icon="hero-list-bullet"
+              />
+              <.kpi_card
+                label="Tokens"
+                value={metric_value(@metrics, "total_tokens")}
+                icon="hero-chart-bar"
+                accent="text-[var(--session)]"
+              />
             </div>
           </div>
 
-          <div class="mt-6 flex flex-wrap gap-3">
-            <.trace_scope_button
-              id="trace-scope-all"
-              patch={trace_scope_path(@session, nil)}
-              active={is_nil(@selected_thread)}
-              label="All traces"
-            />
-            <.trace_scope_button
-              :for={thread <- @threads}
-              id={"trace-scope-thread-#{thread.id}"}
-              patch={trace_scope_path(@session, thread)}
-              active={selected_thread?(@selected_thread, thread)}
-              label={thread_scope_label(thread)}
-            />
-          </div>
-        </section>
-
-        <div class="grid gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <div class="space-y-8">
-            <section
-              id="session-trace"
-              class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
+          <div class="console-tabs">
+            <button
+              type="button"
+              phx-click="set_view"
+              phx-value-view="transcript"
+              class={["console-tab", @view_tab == "transcript" && "console-tab-active"]}
             >
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-                    Trace Timeline
-                  </p>
-                  <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                    Chronological events
-                  </h2>
-                  <p class="mt-1 text-sm leading-6 text-neutral-600">
-                    Ordered event flow across status changes, agent messages, tools, approvals, and thread hand-offs.
-                  </p>
-                </div>
-              </div>
+              Transcript
+            </button>
+            <button
+              type="button"
+              phx-click="set_view"
+              phx-value-view="debug"
+              class={["console-tab", @view_tab == "debug" && "console-tab-active"]}
+            >
+              Debug
+            </button>
+          </div>
+        </section>
 
-              <div
-                :if={@latest_error_event}
-                class="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900"
+        <div :if={@view_tab == "transcript"} class="space-y-6">
+          <section class="space-y-3">
+            <div class="space-y-1">
+              <p class="console-label">Thread traces</p>
+              <p class="console-copy">
+                Scope the transcript to the primary thread or drill into delegate work without leaving the session.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <.link
+                id="trace-scope-all"
+                patch={trace_scope_path(@session, nil)}
+                class={[
+                  "console-button",
+                  if(is_nil(@selected_thread),
+                    do: "console-button-primary",
+                    else: "console-button-secondary"
+                  )
+                ]}
               >
-                <p class="font-semibold">Latest error</p>
-                <p class="mt-2 leading-6">{timeline_summary(@latest_error_event)}</p>
+                All traces
+              </.link>
+              <.link
+                :for={thread <- @threads}
+                id={"trace-scope-thread-#{thread.id}"}
+                patch={trace_scope_path(@session, thread)}
+                class={[
+                  "console-button",
+                  if(selected_thread?(@selected_thread, thread),
+                    do: "console-button-primary",
+                    else: "console-button-secondary"
+                  )
+                ]}
+              >
+                {thread_scope_label(thread)}
+              </.link>
+            </div>
+          </section>
+
+          <section
+            :if={@latest_error_event}
+            class="console-panel border-[var(--danger)]/20 bg-[var(--danger-soft)]"
+          >
+            <div class="space-y-2">
+              <p class="console-label text-[var(--danger)]">Latest error</p>
+              <p class="text-sm font-semibold text-[var(--text-strong)]">
+                {timeline_summary(@latest_error_event)}
+              </p>
+            </div>
+          </section>
+
+          <section
+            :if={@pending_confirmations != []}
+            class="console-panel border-[var(--accent)]/20 bg-[var(--accent-soft)]"
+          >
+            <div class="space-y-4">
+              <div class="space-y-1">
+                <p class="console-label">Approval Required</p>
+                <p class="text-sm text-[var(--text-muted)]">
+                  These tool calls are blocked until an operator responds.
+                </p>
               </div>
 
-              <div class="mt-6 space-y-4">
+              <div class="space-y-3">
                 <div
-                  :for={event <- @display_events}
-                  id={"timeline-event-#{event.id}"}
-                  class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5"
+                  :for={event <- @pending_confirmations}
+                  id={"pending-confirmation-#{event.id}"}
+                  class="rounded-[8px] border border-[var(--accent)]/20 bg-[var(--panel-bg)] p-4"
                 >
-                  <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div class="space-y-3">
+                  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center rounded-full bg-neutral-900 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white">
-                          #{event.sequence}
+                        <span class={tool_status_badge_class(:awaiting_confirmation)}>
+                          {tool_status_label(:awaiting_confirmation)}
                         </span>
-                        <span class={event_badge_class(event.type)}>
-                          {event.type}
-                        </span>
-                        <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
                           {event_thread_label(event, @thread_labels)}
                         </span>
                       </div>
-                      <p class="text-sm leading-6 text-neutral-800">
+                      <p class="text-sm font-semibold text-[var(--text-strong)]">
                         {timeline_summary(event)}
                       </p>
+                      <pre :if={tool_request_detail(event)} class="console-code-block">
+                        {tool_request_detail(event)}
+                      </pre>
                     </div>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      {event_timestamp(event)}
-                    </p>
+
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        id={"confirm-allow-#{event.id}"}
+                        type="button"
+                        phx-click="confirm_tool"
+                        phx-value-tool_use_id={event.id}
+                        phx-value-result="allow"
+                        class="console-button console-button-primary"
+                      >
+                        Allow
+                      </button>
+                      <button
+                        id={"confirm-deny-#{event.id}"}
+                        type="button"
+                        phx-click="confirm_tool"
+                        phx-value-tool_use_id={event.id}
+                        phx-value-result="deny"
+                        class="console-button console-button-secondary"
+                      >
+                        Deny
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </section>
+            </div>
+          </section>
 
+          <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section
-              id="session-tool-executions"
-              class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
+              id="session-trace"
+              class="console-panel console-scroll max-h-[calc(100vh-18rem)] overflow-y-auto"
             >
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-                    Tool Execution
-                  </p>
-                  <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                    Inputs and results
-                  </h2>
-                  <p class="mt-1 text-sm leading-6 text-neutral-600">
-                    Every tool invocation stays paired with its input, confirmation state, and final result payload when available.
-                  </p>
+              <div class="console-transcript">
+                <div :if={@display_events == []}>
+                  <.empty_state
+                    title="No transcript events"
+                    description="This trace scope does not have any visible events yet."
+                  />
                 </div>
-              </div>
 
-              <div
-                :if={@tool_entries == []}
-                class="mt-6 rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500"
-              >
-                No tool executions were recorded for the current trace scope.
-              </div>
-
-              <div :if={@tool_entries != []} class="mt-6 space-y-5">
-                <div
-                  :for={entry <- @tool_entries}
-                  id={"tool-entry-#{entry.use_event.id}"}
-                  class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5"
-                >
-                  <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div class="space-y-2">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <p class="text-base font-semibold text-neutral-950">{entry.tool_name}</p>
-                        <span class={tool_kind_badge_class(entry.kind)}>
-                          {tool_kind_label(entry.kind)}
-                        </span>
-                        <span class={tool_status_badge_class(entry.status)}>
-                          {tool_status_label(entry.status)}
-                        </span>
-                      </div>
-                      <p class="text-sm leading-6 text-neutral-600">
-                        {tool_entry_summary(entry)}
-                      </p>
-                    </div>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      Event #{entry.use_event.sequence}
-                    </p>
-                  </div>
-
-                  <div
-                    :if={entry.awaiting_confirmation?}
-                    id={"pending-confirmation-#{entry.use_event.id}"}
-                    class="mt-5 rounded-[1.25rem] border border-amber-200 bg-amber-50 p-4"
-                  >
-                    <div class="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p class="text-sm font-semibold text-amber-950">
-                          Approval required
-                        </p>
-                        <p class="mt-1 text-sm leading-6 text-amber-900/80">
-                          This session is paused until a `user.tool_confirmation` event allows or denies the request.
-                        </p>
-                      </div>
-                      <div class="flex flex-wrap gap-3">
-                        <.button
-                          id={"confirm-allow-#{entry.use_event.id}"}
-                          phx-click="confirm_tool"
-                          phx-value-tool_use_id={entry.use_event.id}
-                          phx-value-result="allow"
-                          class="rounded-full bg-emerald-600 px-5 text-white hover:bg-emerald-500"
-                        >
-                          Allow
-                        </.button>
-                        <.button
-                          id={"confirm-deny-#{entry.use_event.id}"}
-                          phx-click="confirm_tool"
-                          phx-value-tool_use_id={entry.use_event.id}
-                          phx-value-result="deny"
-                          class="rounded-full border border-rose-300 bg-white px-5 text-rose-700 hover:border-rose-400 hover:bg-rose-50"
-                        >
-                          Deny
-                        </.button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                    <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-                        Input
-                      </p>
-                      <pre class="mt-3 overflow-x-auto text-xs leading-6 text-neutral-800">{entry.input_json}</pre>
-                    </div>
-                    <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-                        Outcome
-                      </p>
-                      <pre class="mt-3 overflow-x-auto text-xs leading-6 text-neutral-800">{entry.outcome_json}</pre>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <div class="space-y-8">
-            <section
-              id="session-metrics"
-              class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
-            >
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-                  Provider Metrics
-                </p>
-                <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                  Usage snapshot
-                </h2>
-                <p class="mt-1 text-sm leading-6 text-neutral-600">
-                  Token or provider usage is aggregated from recorded event payloads when the runtime supplies it.
-                </p>
-              </div>
-
-              <%= if @metrics do %>
-                <div class="mt-6 grid gap-4 sm:grid-cols-2">
-                  <div
-                    :for={{metric, value} <- metric_entries(@metrics)}
-                    class="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 p-4"
-                  >
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-                      {metric}
-                    </p>
-                    <p class="mt-3 text-2xl font-semibold tracking-tight text-neutral-950">
-                      {value}
-                    </p>
-                  </div>
-                </div>
-              <% else %>
-                <div class="mt-6 rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500">
-                  No provider metrics were recorded for this trace yet.
-                </div>
-              <% end %>
-            </section>
-
-            <section
-              id="session-raw-events"
-              class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
-            >
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-                  Raw Events
-                </p>
-                <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                  Persisted payloads
-                </h2>
-                <p class="mt-1 text-sm leading-6 text-neutral-600">
-                  Directly inspect the stored event shape, including payload, stop reason, and thread identifiers.
-                </p>
-              </div>
-
-              <div class="mt-6 space-y-4">
                 <div
                   :for={event <- @display_events}
-                  id={"raw-event-#{event.id}"}
-                  class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4"
+                  class={[
+                    "console-transcript-item",
+                    @selected_event_id == event.id && "console-transcript-item-selected"
+                  ]}
                 >
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-sm font-semibold text-neutral-950">
-                      #{event.sequence} · {event.type}
-                    </p>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      {event_timestamp(event)}
-                    </p>
+                  <div class={transcript_event_class(event)}>
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0 flex-1 space-y-2">
+                        <%= cond do %>
+                          <% event.type == "user.message" -> %>
+                            <div class="flex items-center gap-2">
+                              <.status_badge status="active" size="small" />
+                              <p class="text-sm font-semibold text-[var(--text-strong)]">You</p>
+                              <p class="console-list-meta">{event_timestamp(event)}</p>
+                            </div>
+                            <p class="console-value">{text_content(event.content)}</p>
+                          <% event.type == "agent.message" -> %>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <.status_badge status="running" size="small" />
+                              <p class="text-sm font-semibold text-[var(--text-strong)]">
+                                {session_agent_name(@session)}
+                              </p>
+                              <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                                {event_thread_label(event, @thread_labels)}
+                              </span>
+                              <p class="console-list-meta">{event_timestamp(event)}</p>
+                            </div>
+                            <p class="console-value">{text_content(event.content)}</p>
+                          <% event.type == "agent.thinking" -> %>
+                            <div class="flex items-center gap-2">
+                              <.status_badge status="running" size="small" />
+                              <p class="text-sm font-semibold text-[var(--text-strong)]">Thinking</p>
+                              <p class="console-list-meta">{event_timestamp(event)}</p>
+                            </div>
+                            <p class="console-copy italic">{timeline_summary(event)}</p>
+                          <% tool_use_event?(event) or tool_result_event?(event) -> %>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <p class="text-sm font-semibold text-[var(--text-strong)]">
+                                {payload_value(event.payload, "tool_name") || "Tool"}
+                              </p>
+                              <span class={tool_kind_badge_class(tool_kind(event.type))}>
+                                {tool_kind_label(tool_kind(event.type))}
+                              </span>
+                              <span
+                                :if={awaiting_confirmation_event?(event)}
+                                class={tool_status_badge_class(:awaiting_confirmation)}
+                              >
+                                {tool_status_label(:awaiting_confirmation)}
+                              </span>
+                              <p class="console-list-meta">{event_timestamp(event)}</p>
+                            </div>
+                            <p class="console-copy">{timeline_summary(event)}</p>
+                            <div
+                              :if={awaiting_confirmation_event?(event)}
+                              class="flex flex-wrap gap-2 pt-2"
+                            >
+                              <button
+                                type="button"
+                                phx-click="confirm_tool"
+                                phx-value-tool_use_id={event.id}
+                                phx-value-result="allow"
+                                class="console-button console-button-primary"
+                              >
+                                Allow
+                              </button>
+                              <button
+                                type="button"
+                                phx-click="confirm_tool"
+                                phx-value-tool_use_id={event.id}
+                                phx-value-result="deny"
+                                class="console-button console-button-secondary"
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          <% true -> %>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class={event_badge_class(event.type)}>{event.type}</span>
+                              <p class="console-list-meta">{event_timestamp(event)}</p>
+                            </div>
+                            <p class="console-copy">{timeline_summary(event)}</p>
+                        <% end %>
+                      </div>
+
+                      <button
+                        type="button"
+                        phx-click="select_event"
+                        phx-value-id={event.id}
+                        class="console-button console-button-ghost console-xl-up-inline-flex"
+                      >
+                        Inspect
+                      </button>
+                    </div>
                   </div>
-                  <pre class="mt-4 overflow-x-auto text-xs leading-6 text-neutral-800">{pretty_event(event)}</pre>
                 </div>
               </div>
             </section>
+
+            <aside class="hidden xl:block">
+              <section class="console-panel sticky top-24 space-y-4">
+                <div class="space-y-1">
+                  <p class="console-label">Detail</p>
+                  <h2 class="text-lg font-semibold text-[var(--text-strong)]">
+                    {if @selected_event,
+                      do: "Event ##{@selected_event.sequence}",
+                      else: "Session context"}
+                  </h2>
+                </div>
+
+                <%= if @selected_event do %>
+                  <div class="space-y-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class={event_badge_class(@selected_event.type)}>
+                        {@selected_event.type}
+                      </span>
+                      <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                        {event_thread_label(@selected_event, @thread_labels)}
+                      </span>
+                    </div>
+                    <p class="console-copy">{timeline_summary(@selected_event)}</p>
+                    <div>
+                      <p class="console-label">Payload</p>
+                      <.json_block
+                        data={SessionEventDefinition.serialize_event(@selected_event)}
+                        class="max-h-[24rem] overflow-y-auto"
+                      />
+                    </div>
+                  </div>
+                <% else %>
+                  <div class="space-y-3">
+                    <p class="console-copy">
+                      Pick any transcript item to inspect its raw payload, thread label, and tool details without leaving the conversation flow.
+                    </p>
+                    <p class="console-list-meta">
+                      Current scope: {@selected_trace_label}
+                    </p>
+                  </div>
+                <% end %>
+              </section>
+            </aside>
           </div>
+
+          <section :if={@can_compose} class="console-composer">
+            <.form
+              for={@composer_form}
+              id="session-composer"
+              phx-change="validate_composer"
+              phx-submit="send_message"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div class="min-w-0 flex-1">
+                  <textarea
+                    name="composer[prompt]"
+                    rows="2"
+                    placeholder="Send a follow-up to this session"
+                  >{@composer_params["prompt"]}</textarea>
+                </div>
+                <button type="submit" class="console-button console-button-primary">
+                  <.icon name="hero-paper-airplane" class="size-4" /> Send
+                </button>
+              </div>
+            </.form>
+          </section>
+        </div>
+
+        <div :if={@view_tab == "debug"} class="space-y-6">
+          <section class="space-y-3">
+            <div class="space-y-1">
+              <p class="console-label">Thread traces</p>
+              <p class="console-copy">
+                Match the debug timeline to the same thread scope used in the transcript.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <.link
+                id="debug-trace-scope-all"
+                patch={trace_scope_path(@session, nil)}
+                class={[
+                  "console-button",
+                  if(is_nil(@selected_thread),
+                    do: "console-button-primary",
+                    else: "console-button-secondary"
+                  )
+                ]}
+              >
+                All traces
+              </.link>
+              <.link
+                :for={thread <- @threads}
+                id={"debug-trace-scope-thread-#{thread.id}"}
+                patch={trace_scope_path(@session, thread)}
+                class={[
+                  "console-button",
+                  if(selected_thread?(@selected_thread, thread),
+                    do: "console-button-primary",
+                    else: "console-button-secondary"
+                  )
+                ]}
+              >
+                {thread_scope_label(thread)}
+              </.link>
+            </div>
+          </section>
+
+          <div class="console-tabs">
+            <button
+              :for={tab <- debug_tabs()}
+              type="button"
+              phx-click="set_debug_tab"
+              phx-value-tab={tab.value}
+              class={["console-tab", @debug_tab == tab.value && "console-tab-active"]}
+            >
+              {tab.label}
+            </button>
+          </div>
+
+          <section
+            :if={@debug_tab == "timeline"}
+            id="session-timeline"
+            class="console-panel space-y-3"
+          >
+            <div
+              :if={@latest_error_event}
+              class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-4"
+            >
+              <p class="text-sm font-semibold text-[var(--danger)]">Latest error</p>
+              <p class="console-copy mt-2">{timeline_summary(@latest_error_event)}</p>
+            </div>
+
+            <div
+              :for={event <- @display_events}
+              class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="space-y-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                      #{event.sequence}
+                    </span>
+                    <span class={event_badge_class(event.type)}>{event.type}</span>
+                    <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                      {event_thread_label(event, @thread_labels)}
+                    </span>
+                  </div>
+                  <p class="console-copy">{timeline_summary(event)}</p>
+                </div>
+                <p class="console-list-meta">{event_timestamp(event)}</p>
+              </div>
+            </div>
+          </section>
+
+          <section
+            :if={@debug_tab == "tools"}
+            id="session-tool-executions"
+            class="console-panel space-y-4"
+          >
+            <div :if={@tool_entries == []}>
+              <.empty_state
+                title="No tool executions"
+                description="This trace scope has not recorded any tool use or tool result events."
+              />
+            </div>
+
+            <div :if={@tool_entries != []} class="space-y-4">
+              <div
+                :for={entry <- @tool_entries}
+                class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+              >
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-sm font-semibold text-[var(--text-strong)]">{entry.tool_name}</p>
+                    <span class={tool_kind_badge_class(entry.kind)}>
+                      {tool_kind_label(entry.kind)}
+                    </span>
+                    <span class={tool_status_badge_class(entry.status)}>
+                      {tool_status_label(entry.status)}
+                    </span>
+                  </div>
+                  <p class="console-copy">{tool_entry_summary(entry)}</p>
+                  <div :if={entry.awaiting_confirmation?} class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      phx-click="confirm_tool"
+                      phx-value-tool_use_id={entry.use_event.id}
+                      phx-value-result="allow"
+                      class="console-button console-button-primary"
+                    >
+                      Allow
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="confirm_tool"
+                      phx-value-tool_use_id={entry.use_event.id}
+                      phx-value-result="deny"
+                      class="console-button console-button-secondary"
+                    >
+                      Deny
+                    </button>
+                  </div>
+                  <div class="grid gap-4 lg:grid-cols-2">
+                    <div>
+                      <p class="console-label">Input</p>
+                      <pre class="console-code-block">{entry.input_json}</pre>
+                    </div>
+                    <div>
+                      <p class="console-label">Outcome</p>
+                      <pre class="console-code-block">{entry.outcome_json}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section :if={@debug_tab == "metrics"} id="session-metrics" class="console-panel space-y-4">
+            <%= if @metrics do %>
+              <div class="console-grid-3">
+                <.kpi_card
+                  :for={{label, value} <- metric_entries(@metrics)}
+                  label={label}
+                  value={value}
+                />
+              </div>
+            <% else %>
+              <.empty_state
+                title="No provider metrics"
+                description="Usage data has not been recorded for this trace yet."
+              />
+            <% end %>
+          </section>
+
+          <section :if={@debug_tab == "raw"} id="session-raw-events" class="console-panel space-y-3">
+            <div
+              :for={event <- @display_events}
+              class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <p class="text-sm font-semibold text-[var(--text-strong)]">
+                  #{event.sequence} · {event.type}
+                </p>
+                <p class="console-list-meta">{event_timestamp(event)}</p>
+              </div>
+              <pre class="console-code-block mt-4">{pretty_event(event)}</pre>
+            </div>
+          </section>
         </div>
       <% end %>
     </Layouts.app>
     """
+  end
+
+  defp default_session_filters do
+    %{"search" => "", "status" => "all"}
+  end
+
+  defp normalize_session_filters(params) do
+    %{
+      "search" => Map.get(params, "search", ""),
+      "status" => Map.get(params, "status", "all")
+    }
+  end
+
+  defp filter_sessions(sessions, filters) do
+    search = filters["search"] |> String.downcase() |> String.trim()
+    status = filters["status"]
+
+    Enum.filter(sessions, fn session ->
+      session_status_match?(session, status) and session_search_match?(session, search)
+    end)
+  end
+
+  defp session_status_filters do
+    [
+      %{label: "All", value: "all"},
+      %{label: "Needs Input", value: "needs_input"},
+      %{label: "Running", value: "running"},
+      %{label: "Finished", value: "finished"},
+      %{label: "Errored", value: "errored"}
+    ]
+  end
+
+  defp session_status_match?(session, "needs_input"),
+    do: requires_action?(session.stop_reason)
+
+  defp session_status_match?(session, "running"), do: to_string(session.status) == "running"
+
+  defp session_status_match?(session, "finished"),
+    do: to_string(session.status) in ["idle", "archived"]
+
+  defp session_status_match?(session, "errored"), do: to_string(session.status) == "errored"
+  defp session_status_match?(_session, _status), do: true
+
+  defp session_search_match?(_session, ""), do: true
+
+  defp session_search_match?(session, search) do
+    haystack =
+      [session.title, session_agent_name(session), session_model(session)]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(" ")
+      |> String.downcase()
+
+    String.contains?(haystack, search)
+  end
+
+  defp default_composer_params, do: %{"prompt" => ""}
+
+  defp normalize_composer_params(params) do
+    %{"prompt" => Map.get(params, "prompt", "")}
+  end
+
+  defp normalized_user_message(message, %Session{} = session, actor) do
+    params = %{
+      "type" => "user.message",
+      "content" => [%{"type" => "text", "text" => message}]
+    }
+
+    SessionEventDefinition.normalize_append_payload(params, session, actor)
+  end
+
+  defp selected_event(events, nil), do: List.last(events)
+
+  defp selected_event(events, selected_event_id) do
+    Enum.find(events, List.last(events), &(&1.id == selected_event_id))
+  end
+
+  defp session_status_badge(%Session{} = session) do
+    if requires_action?(session.stop_reason), do: "needs_input", else: session.status
+  end
+
+  defp session_composable?(nil), do: false
+
+  defp session_composable?(%Session{} = session) do
+    to_string(session.status) in ["idle", "running"] or requires_action?(session.stop_reason)
+  end
+
+  defp metric_value(nil, _key), do: "0"
+  defp metric_value(metrics, key), do: format_metric(metrics[key] || metrics[to_string(key)])
+
+  defp transcript_event_class(%SessionEvent{type: "agent.message"}) do
+    "rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+  end
+
+  defp transcript_event_class(%SessionEvent{type: "user.message"}) do
+    "rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4"
+  end
+
+  defp transcript_event_class(%SessionEvent{type: type}) when type in @tool_use_event_types do
+    "rounded-[8px] border border-[var(--accent)]/20 bg-[var(--accent-soft)] p-4"
+  end
+
+  defp transcript_event_class(%SessionEvent{type: type}) when type in @tool_result_event_types do
+    "rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+  end
+
+  defp transcript_event_class(%SessionEvent{}) do
+    "rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4"
+  end
+
+  defp tool_use_event?(%SessionEvent{type: type}), do: type in @tool_use_event_types
+  defp tool_use_event?(_event), do: false
+
+  defp tool_result_event?(%SessionEvent{type: type}), do: type in @tool_result_event_types
+  defp tool_result_event?(_event), do: false
+
+  defp debug_tabs do
+    [
+      %{label: "Timeline", value: "timeline"},
+      %{label: "Tools", value: "tools"},
+      %{label: "Metrics", value: "metrics"},
+      %{label: "Raw Events", value: "raw"}
+    ]
+  end
+
+  defp pending_session_count(actor) do
+    actor
+    |> list_sessions()
+    |> count_requires_action()
   end
 
   defp load_detail(session_id, selected_thread_id, actor) do
@@ -1007,6 +1441,17 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
     end
   end
 
+  defp tool_request_detail(%SessionEvent{} = event) do
+    input = payload_value(event.payload, "input")
+
+    cond do
+      is_binary(payload_value(input, "command")) -> payload_value(input, "command")
+      is_binary(payload_value(input, "prompt")) -> payload_value(input, "prompt")
+      is_map(input) and map_size(input) > 0 -> pretty_data(input)
+      true -> nil
+    end
+  end
+
   defp text_or_fallback(content, fallback) do
     case text_content(content) do
       "" -> fallback
@@ -1122,10 +1567,6 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
   defp short_id(nil), do: "unknown"
   defp short_id(id) when is_binary(id), do: String.slice(id, 0, 8)
 
-  defp status_label(status) when is_atom(status), do: status |> to_string() |> String.capitalize()
-  defp status_label(status) when is_binary(status), do: String.capitalize(status)
-  defp status_label(_status), do: "Unknown"
-
   defp confirmation_message("allow"), do: "Approval submitted. The session resumed."
 
   defp confirmation_message("deny"),
@@ -1161,29 +1602,6 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
 
   defp event_badge_class(_type) do
     "inline-flex items-center rounded-full bg-cyan-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-cyan-900"
-  end
-
-  defp status_badge_class(:running),
-    do:
-      "inline-flex items-center rounded-full bg-cyan-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-cyan-900"
-
-  defp status_badge_class(:archived),
-    do:
-      "inline-flex items-center rounded-full bg-neutral-900 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white"
-
-  defp status_badge_class(_status),
-    do:
-      "inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-emerald-900"
-
-  defp detail_status_badge_class(status) do
-    base =
-      "inline-flex items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] "
-
-    case status do
-      :running -> base <> "bg-cyan-300/90 text-cyan-950"
-      :archived -> base <> "bg-white/15 text-white"
-      _other -> base <> "bg-emerald-300/90 text-emerald-950"
-    end
   end
 
   defp tool_kind_label(:builtin), do: "Built-in"
@@ -1243,51 +1661,4 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLive do
     do: "Custom tool execution tracked in the session event log."
 
   defp tool_entry_summary(_entry), do: "Built-in tool execution captured from the runtime."
-
-  defp metric_card(assigns) do
-    ~H"""
-    <div>
-      <p class="text-xs uppercase tracking-[0.2em] text-current/65">{@label}</p>
-      <p class="mt-2 text-2xl font-semibold tracking-tight">{@value}</p>
-    </div>
-    """
-  end
-
-  defp console_tab(%{navigate: nil} = assigns) do
-    ~H"""
-    <span class="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white">
-      {@label}
-    </span>
-    """
-  end
-
-  defp console_tab(assigns) do
-    ~H"""
-    <.link
-      navigate={@navigate}
-      class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-    >
-      {@label}
-    </.link>
-    """
-  end
-
-  defp trace_scope_button(assigns) do
-    ~H"""
-    <.link
-      id={@id}
-      patch={@patch}
-      class={[
-        "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition",
-        if(@active,
-          do: "border border-cyan-300 bg-cyan-50 text-cyan-900",
-          else:
-            "border border-neutral-200 bg-neutral-50 text-neutral-600 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-900"
-        )
-      ]}
-    >
-      {@label}
-    </.link>
-    """
-  end
 end

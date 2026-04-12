@@ -26,6 +26,8 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
       |> assign(:selected_vault, nil)
       |> assign(:credentials, [])
       |> assign(:selected_credential, nil)
+      |> assign(:show_create_vault, false)
+      |> assign(:show_credential_form, false)
       |> assign(:vault_errors, [])
       |> assign(:credential_errors, [])
       |> assign_vault_form(default_vault_params())
@@ -47,6 +49,7 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
        |> assign(:selected_vault, vault)
        |> assign(:credentials, list_credentials(vault, actor))
        |> assign(:selected_credential, credential)
+       |> assign(:show_credential_form, true)
        |> assign(:page_title, "#{vault_display_name(vault)} · Vaults")
        |> assign_credential_form(credential_form_params(credential))}
     else
@@ -73,6 +76,7 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
          |> assign(:selected_vault, vault)
          |> assign(:credentials, list_credentials(vault, actor))
          |> assign(:selected_credential, nil)
+         |> assign(:show_credential_form, false)
          |> assign(:page_title, "#{vault_display_name(vault)} · Vaults")
          |> assign_credential_form(default_credential_params())}
 
@@ -97,6 +101,7 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
      |> assign(:selected_vault, nil)
      |> assign(:credentials, [])
      |> assign(:selected_credential, nil)
+     |> assign(:show_credential_form, false)
      |> assign(:page_title, "Vaults")
      |> assign_credential_form(default_credential_params())}
   end
@@ -104,6 +109,10 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
   @impl true
   def handle_event("validate_vault", %{"vault" => params}, socket) do
     {:noreply, assign_vault_form(socket, params)}
+  end
+
+  def handle_event("toggle_create_vault", _params, socket) do
+    {:noreply, update(socket, :show_create_vault, &(!&1))}
   end
 
   def handle_event("create_vault", %{"vault" => params}, socket) do
@@ -126,6 +135,18 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
 
   def handle_event("validate_credential", %{"credential" => params}, socket) do
     {:noreply, assign_credential_form(socket, params)}
+  end
+
+  def handle_event("show_new_credential", _params, %{assigns: %{selected_vault: nil}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("show_new_credential", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_credential, nil)
+     |> assign(:show_credential_form, true)
+     |> assign_credential_form(default_credential_params())}
   end
 
   def handle_event(
@@ -173,514 +194,328 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      main_class="px-4 py-8 sm:px-6 lg:px-8"
-      container_class="mx-auto max-w-7xl space-y-8"
+      section={:vaults}
+      main_class="px-4 py-6 sm:px-6 lg:px-8"
+      container_class="mx-auto max-w-7xl space-y-6"
     >
-      <section class="overflow-hidden rounded-[2rem] border border-sky-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_40%),linear-gradient(135deg,_#0f172a,_#14213d_58%,_#1d4ed8)] text-white shadow-2xl shadow-sky-950/20">
-        <div class="grid gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:px-10">
-          <div class="space-y-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200">
-              Secrets And Identity
-            </p>
-            <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              Vaults & credentials
-            </h1>
-            <p class="max-w-2xl text-sm leading-6 text-sky-50/80">
-              Register per-user credentials once, match them by MCP server URL, and rotate write-only secrets without falling back to the raw API.
-            </p>
-            <div class="flex flex-wrap gap-3 pt-2">
-              <.console_tab navigate={~p"/console/agents/new"} label="Agents" />
-              <.console_tab navigate={~p"/console/environments"} label="Environments" />
-              <.console_tab active label="Vaults" />
-            </div>
-          </div>
-          <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-sky-50/90 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <.metric_card label="Vaults" value={length(@vaults)} />
-            <.metric_card label="Credentials" value={@total_credential_count} />
-            <.metric_card label="Selected" value={length(@credentials)} />
-          </div>
-        </div>
-      </section>
+      <.page_header
+        title="Vaults & Credentials"
+        description="Manage write-only credential vaults scoped to MCP server URLs."
+      />
 
-      <div class="grid gap-8 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-        <div class="space-y-8">
-          <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                Create vault
-              </p>
-              <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                New vault
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-neutral-600">
-                Vaults group credentials for one dashboard user. Sessions reference the vault ID, then resolve the matching credential by MCP server URL at runtime.
-              </p>
-            </div>
-
-            <div
-              :if={@vault_errors != []}
-              id="vault-error-list"
-              class="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900"
+      <div class="grid gap-6 lg:grid-cols-5">
+        <section class="space-y-3 lg:col-span-2">
+          <div class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+            <button
+              type="button"
+              phx-click="toggle_create_vault"
+              class="flex w-full items-center justify-between p-4 text-sm font-medium text-[var(--text-strong)]"
             >
-              <p class="font-semibold">Vault could not be created.</p>
-              <p :for={error <- @vault_errors} class="mt-2">{error}</p>
-            </div>
+              <span class="flex items-center gap-2">
+                <.icon name="hero-plus" class="size-3.5" /> New Vault
+              </span>
+              <.icon
+                name={if(@show_create_vault, do: "hero-chevron-down", else: "hero-chevron-right")}
+                class="size-4 text-[var(--text-muted)]"
+              />
+            </button>
 
-            <.form
-              for={@vault_form}
-              id="vault-form"
-              class="mt-6 space-y-5"
-              phx-change="validate_vault"
-              phx-submit="create_vault"
-            >
-              <.input
-                field={@vault_form[:name]}
-                label="Vault name"
-                placeholder="Alice"
-              />
-              <.input
-                field={@vault_form[:description]}
-                type="textarea"
-                label="Description"
-                rows="4"
-                placeholder="Third-party service credentials for this user."
-              />
-              <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
+            <div :if={@show_create_vault} class="border-t border-[var(--border-subtle)] p-4">
+              <div
+                :if={@vault_errors != []}
+                id="vault-error-list"
+                class="mb-3 rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--text-strong)]"
+              >
+                <p :for={error <- @vault_errors}>{error}</p>
+              </div>
+
+              <.form
+                for={@vault_form}
+                id="vault-form"
+                class="space-y-3"
+                phx-change="validate_vault"
+                phx-submit="create_vault"
+              >
+                <.input field={@vault_form[:name]} label="Name" placeholder="My Vault" />
+                <.input
+                  field={@vault_form[:description]}
+                  label="Description"
+                  placeholder="What is this vault for?"
+                />
                 <.input
                   field={@vault_form[:metadata_json]}
                   type="textarea"
                   label="Metadata JSON"
-                  rows="7"
-                  placeholder={"{\n  \"external_user_id\": \"usr_abc123\"\n}"}
+                  rows="2"
                 />
-                <p class="mt-2 text-sm leading-6 text-neutral-500">
-                  Optional external identifiers or labels. The editor expects a JSON object.
-                </p>
-              </div>
-              <.button
-                id="vault-save-button"
-                class="rounded-full bg-sky-600 px-5 text-white hover:bg-sky-500"
-              >
-                Create vault
-              </.button>
-            </.form>
-          </section>
-
-          <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                  Catalog
-                </p>
-                <h2 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                  Vault list
-                </h2>
-                <p class="mt-1 text-sm leading-6 text-neutral-600">
-                  Choose a vault to add new credentials or rotate existing ones.
-                </p>
-              </div>
+                <.button id="vault-save-button" class="console-button console-button-primary">
+                  Create Vault
+                </.button>
+              </.form>
             </div>
-
-            <div id="vault-list" class="mt-6 space-y-3">
-              <div
-                :if={@vaults == []}
-                class="rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500"
-              >
-                No vaults yet. Create one above to start attaching credentials.
-              </div>
-
-              <div :for={vault <- @vaults} class={vault_card_class(vault, @selected_vault)}>
-                <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <p class="text-base font-semibold text-neutral-950">
-                        {vault_display_name(vault)}
-                      </p>
-                      <span class="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sky-900">
-                        vault
-                      </span>
-                    </div>
-                    <p class="text-sm leading-6 text-neutral-600">
-                      {vault.description || "No description yet."}
-                    </p>
-                    <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                      Updated {ConsoleHelpers.format_timestamp(vault.updated_at)}
-                    </p>
-                  </div>
-                  <.button
-                    patch={~p"/console/vaults/#{vault.id}"}
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-800 hover:border-sky-300 hover:bg-sky-50"
-                  >
-                    Open
-                  </.button>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <section class="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div
-            :if={is_nil(@selected_vault)}
-            class="flex h-full min-h-[34rem] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-8 text-center"
-          >
-            <div class="flex size-14 items-center justify-center rounded-full bg-sky-100 text-sky-700">
-              <.icon name="hero-key" class="size-7" />
-            </div>
-            <h2 class="mt-5 text-2xl font-semibold tracking-tight text-neutral-950">
-              Select a vault
-            </h2>
-            <p class="mt-3 max-w-lg text-sm leading-7 text-neutral-600">
-              Credential forms stay scoped to one vault so rotation is obvious and the MCP server matching rules stay visible.
-            </p>
           </div>
 
-          <div :if={@selected_vault} class="space-y-8">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                  Selected vault
-                </p>
-                <h2 class="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
-                  {vault_display_name(@selected_vault)}
-                </h2>
-                <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
-                  {@selected_vault.description ||
-                    "Credentials in this vault are matched by MCP server URL at session runtime."}
-                </p>
-              </div>
-              <div class="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600">
-                <p class="font-medium text-neutral-900">Vault ID</p>
-                <p class="mt-1 font-mono text-xs">{@selected_vault.id}</p>
-              </div>
+          <div id="vault-list" class="space-y-2">
+            <div :if={@vaults == []}>
+              <.empty_state
+                title="No vaults"
+                description="Create one to start attaching credentials."
+              />
             </div>
 
-            <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+            <.link
+              :for={vault <- @vaults}
+              patch={~p"/console/vaults/#{vault.id}"}
+              class={[
+                "block rounded-[8px] border p-4 transition min-h-[56px]",
+                selected_vault?(@selected_vault, vault) &&
+                  "border-[var(--session)]/40 bg-[var(--session-soft)]",
+                !selected_vault?(@selected_vault, vault) &&
+                  "border-[var(--border-subtle)] bg-[var(--panel-bg)] hover:bg-[var(--panel-muted)]"
+              ]}
+            >
               <div class="flex items-start gap-3">
-                <.icon name="hero-lock-closed" class="mt-0.5 size-5 shrink-0" />
-                <div>
-                  <p class="font-semibold">Write-only secret fields</p>
-                  <p class="mt-1">
-                    Access tokens, refresh tokens, and client secrets are accepted on save and never rendered back. Leave a secret input blank during rotation to preserve the current stored value.
+                <span class="mt-0.5 inline-flex shrink-0 text-[var(--success)]">
+                  <.icon name="hero-lock-closed" class="size-4" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-medium text-[var(--text-strong)]">
+                      {vault_display_name(vault)}
+                    </p>
+                    <span class="ml-auto text-[10px] text-[var(--text-muted)]">
+                      {credential_count(vault, @selected_vault, @credentials)}
+                      {if credential_count(vault, @selected_vault, @credentials) == 1,
+                        do: " cred",
+                        else: " creds"}
+                    </span>
+                  </div>
+                  <p :if={vault.description} class="mt-1 truncate text-xs text-[var(--text-muted)]">
+                    {vault.description}
                   </p>
                 </div>
               </div>
-            </div>
+            </.link>
+          </div>
+        </section>
 
-            <div class="grid gap-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-              <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                      Credentials
-                    </p>
-                    <h3 class="mt-2 text-lg font-semibold tracking-tight text-neutral-950">
-                      Stored routes
-                    </h3>
-                  </div>
-                  <.button
-                    :if={@selected_credential}
-                    patch={~p"/console/vaults/#{@selected_vault.id}"}
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-800 hover:border-neutral-400 hover:bg-neutral-100"
+        <section class="lg:col-span-3">
+          <%= if @selected_vault do %>
+            <div class="space-y-4">
+              <div class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4">
+                <div class="mb-2 flex items-center gap-2">
+                  <.icon name="hero-lock-closed" class="size-5 text-[var(--success)]" />
+                  <h2 class="text-base font-semibold text-[var(--text-strong)]">
+                    {vault_display_name(@selected_vault)}
+                  </h2>
+                </div>
+                <p :if={@selected_vault.description} class="mb-2 text-xs text-[var(--text-muted)]">
+                  {@selected_vault.description}
+                </p>
+                <p class="text-[10px] font-mono text-[var(--text-muted)]">ID: {@selected_vault.id}</p>
+                <div class="mt-3 rounded-[8px] border border-[var(--success)]/20 bg-[var(--success-soft)] p-3 text-xs text-[var(--success)]">
+                  Secrets are write-only. Stored values cannot be retrieved.
+                </div>
+              </div>
+
+              <div class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-semibold text-[var(--text-strong)]">Credentials</h3>
+                  <button
+                    id="show-credential-form-button"
+                    type="button"
+                    phx-click="show_new_credential"
+                    class="console-button console-button-secondary text-xs"
                   >
-                    New credential
-                  </.button>
+                    <.icon name="hero-plus" class="size-3" /> Add Credential
+                  </button>
                 </div>
 
-                <div id="credential-list" class="mt-5 space-y-3">
-                  <div
-                    :if={@credentials == []}
-                    class="rounded-[1.25rem] border border-dashed border-neutral-300 bg-white px-4 py-8 text-center text-sm text-neutral-500"
-                  >
-                    No credentials yet for this vault.
-                  </div>
-
-                  <div
-                    :for={credential <- @credentials}
-                    class={credential_card_class(credential, @selected_credential)}
-                  >
-                    <div class="flex items-start justify-between gap-4">
-                      <div class="space-y-2">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <p class="text-sm font-semibold text-neutral-950">
+                <%= if @credentials == [] and !@show_credential_form and is_nil(@selected_credential) do %>
+                  <.empty_state
+                    title="No credentials"
+                    description="Add a credential to map secrets to an MCP server URL."
+                  />
+                <% else %>
+                  <div id="credential-list" class="space-y-2">
+                    <.link
+                      :for={credential <- @credentials}
+                      patch={
+                        ~p"/console/vaults/#{@selected_vault.id}/credentials/#{credential.id}/rotate"
+                      }
+                      class="flex min-h-[56px] items-center justify-between rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4 transition hover:bg-[var(--panel-bg)]"
+                    >
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm font-medium text-[var(--text-strong)]">
                             {credential_display_name(credential)}
-                          </p>
-                          <span class={credential_type_badge_class(credential)}>
-                            {credential_type_label(credential)}
                           </span>
+                          <.status_badge status={credential_type(credential_form_params(credential))} />
                         </div>
-                        <p class="break-all font-mono text-xs text-neutral-500">
+                        <p class="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">
                           {credential.mcp_server_url}
                         </p>
-                        <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                          Updated {ConsoleHelpers.format_timestamp(credential.updated_at)}
-                        </p>
                       </div>
-                      <.button
-                        id={"credential-rotate-button-#{credential.id}"}
-                        patch={
-                          ~p"/console/vaults/#{@selected_vault.id}/credentials/#{credential.id}/rotate"
-                        }
-                        class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-800 hover:border-sky-300 hover:bg-sky-100"
-                      >
-                        Rotate
-                      </.button>
-                    </div>
+                      <.icon
+                        name="hero-arrow-path"
+                        class="ml-2 size-4 shrink-0 text-[var(--text-muted)]"
+                      />
+                    </.link>
                   </div>
-                </div>
+                <% end %>
               </div>
 
-              <div class="space-y-5">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                    {credential_mode_label(@selected_credential)}
-                  </p>
-                  <h3 class="mt-2 text-xl font-semibold tracking-tight text-neutral-950">
-                    {credential_form_title(@selected_credential)}
-                  </h3>
-                  <p class="mt-1 text-sm leading-6 text-neutral-600">
-                    {credential_form_description(@selected_credential)}
-                  </p>
-                </div>
+              <div
+                :if={@show_credential_form || @selected_credential}
+                class="space-y-3 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4"
+              >
+                <h3 class="text-sm font-semibold text-[var(--text-strong)]">
+                  {if @selected_credential, do: "Rotate Credential", else: "New Credential"}
+                </h3>
 
                 <div
                   :if={@credential_errors != []}
                   id="credential-error-list"
-                  class="rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900"
+                  class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--text-strong)]"
                 >
-                  <p class="font-semibold">Credential could not be saved.</p>
-                  <p :for={error <- @credential_errors} class="mt-2">{error}</p>
+                  <p :for={error <- @credential_errors}>{error}</p>
                 </div>
 
                 <div
                   :if={@selected_credential}
-                  class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4"
+                  class="space-y-1 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-3 text-xs"
                 >
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                    Locked fields
+                  <p class="font-medium text-[var(--text-strong)]">Locked routing fields</p>
+                  <p class="text-[var(--text-muted)]">
+                    {credential_display_name(@selected_credential)} · {credential_type_label(
+                      @selected_credential
+                    )} · {@selected_credential.mcp_server_url}
                   </p>
-                  <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">Type</p>
-                      <p class="mt-1 font-medium text-neutral-900">
-                        {credential_type_label(@selected_credential)}
-                      </p>
-                    </div>
-                    <div>
-                      <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                        MCP server URL
-                      </p>
-                      <p class="mt-1 break-all font-mono text-xs text-neutral-700">
-                        {@selected_credential.mcp_server_url}
-                      </p>
-                    </div>
-                    <div :if={@selected_credential.type == :mcp_oauth}>
-                      <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                        Token endpoint
-                      </p>
-                      <p class="mt-1 break-all font-mono text-xs text-neutral-700">
-                        {@selected_credential.token_endpoint || "Not stored"}
-                      </p>
-                    </div>
-                    <div :if={@selected_credential.type == :mcp_oauth}>
-                      <p class="text-xs uppercase tracking-[0.18em] text-neutral-400">Client ID</p>
-                      <p class="mt-1 break-all font-mono text-xs text-neutral-700">
-                        {@selected_credential.client_id || "Not stored"}
-                      </p>
-                    </div>
-                  </div>
                 </div>
 
                 <.form
                   for={@credential_form}
                   id="credential-form"
-                  class="space-y-5"
+                  class="space-y-3"
                   phx-change="validate_credential"
                   phx-submit="save_credential"
                 >
-                  <div class="grid gap-5 md:grid-cols-2">
+                  <div :if={is_nil(@selected_credential)} class="space-y-3">
                     <.input
                       field={@credential_form[:display_name]}
-                      label="Display name"
+                      label="Display Name"
                       placeholder="Alice's Slack"
                     />
                     <.input
                       field={@credential_form[:type]}
                       type="select"
-                      label="Credential type"
+                      label="Credential Type"
                       options={credential_type_options()}
-                      disabled={not is_nil(@selected_credential)}
                     />
                     <.input
                       field={@credential_form[:mcp_server_url]}
-                      label="MCP server URL"
-                      placeholder="https://mcp.slack.com/mcp"
-                      disabled={not is_nil(@selected_credential)}
+                      label="MCP Server URL"
+                      placeholder="https://mcp.example.com/sse"
                     />
-                    <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
-                      <p class="text-sm font-medium text-neutral-900">Routing rule</p>
-                      <p class="mt-2 text-sm leading-6 text-neutral-600">
-                        One credential route matches one MCP server URL inside this vault.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    :if={credential_type(@credential_form_params) == "static_bearer"}
-                    class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4"
-                  >
-                    <.input
-                      field={@credential_form[:token]}
-                      type="password"
-                      label={secret_label(@selected_credential, "Bearer token")}
-                      placeholder={secret_placeholder(@selected_credential, "Enter a bearer token")}
-                    />
-                    <p class="mt-2 text-sm leading-6 text-neutral-500">
-                      Write-only. The stored bearer token is never displayed again after save.
+                    <p class="text-[10px] text-[var(--text-muted)]">
+                      One credential per MCP server URL per vault.
                     </p>
                   </div>
 
-                  <div :if={credential_type(@credential_form_params) == "mcp_oauth"} class="space-y-5">
-                    <div class="grid gap-5 md:grid-cols-2">
+                  <div :if={credential_type(@credential_form_params) == "static_bearer"}>
+                    <.input
+                      field={@credential_form[:token]}
+                      type="password"
+                      label={secret_label(@selected_credential, "Bearer Token")}
+                      placeholder={secret_placeholder(@selected_credential, "Enter token")}
+                    />
+                  </div>
+
+                  <div :if={credential_type(@credential_form_params) == "mcp_oauth"} class="space-y-3">
+                    <div class="grid gap-3 sm:grid-cols-2">
                       <.input
                         field={@credential_form[:access_token]}
                         type="password"
-                        label={secret_label(@selected_credential, "Access token")}
-                        placeholder={
-                          secret_placeholder(@selected_credential, "Enter a fresh access token")
-                        }
+                        label={secret_label(@selected_credential, "Access Token")}
+                        placeholder={secret_placeholder(@selected_credential, "")}
+                      />
+                      <.input
+                        field={@credential_form[:token_endpoint]}
+                        label="Token Endpoint"
+                        disabled={not is_nil(@selected_credential)}
+                      />
+                      <.input
+                        field={@credential_form[:client_id]}
+                        label="Client ID"
+                        disabled={not is_nil(@selected_credential)}
                       />
                       <.input
                         field={@credential_form[:expires_at]}
-                        label="Expires at"
-                        placeholder="2026-05-15T00:00:00Z"
+                        label="Expires At"
+                        placeholder="2026-05-01T00:00:00Z"
                       />
                     </div>
 
-                    <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
-                      <p class="text-sm font-medium text-neutral-900">Refresh block</p>
-                      <p class="mt-2 text-sm leading-6 text-neutral-600">
-                        Token endpoint and client ID are locked after creation. Rotation only updates the secrets and other public surface metadata.
-                      </p>
-                      <div class="mt-4 grid gap-5 md:grid-cols-2">
-                        <.input
-                          field={@credential_form[:token_endpoint]}
-                          label="Token endpoint"
-                          placeholder="https://slack.com/api/oauth.v2.access"
-                          disabled={not is_nil(@selected_credential)}
-                        />
-                        <.input
-                          field={@credential_form[:client_id]}
-                          label="Client ID"
-                          placeholder="1234567890.0987654321"
-                          disabled={not is_nil(@selected_credential)}
-                        />
+                    <details class="text-xs">
+                      <summary class="cursor-pointer py-2 text-[var(--text-muted)] hover:text-[var(--text-strong)]">
+                        Advanced OAuth fields
+                      </summary>
+                      <div class="mt-2 grid gap-3 sm:grid-cols-2">
                         <.input
                           field={@credential_form[:refresh_token]}
                           type="password"
-                          label={secret_label(@selected_credential, "Refresh token")}
-                          placeholder={
-                            secret_placeholder(@selected_credential, "Enter a refresh token")
-                          }
+                          label={secret_label(@selected_credential, "Refresh Token")}
+                          placeholder={secret_placeholder(@selected_credential, "")}
                         />
-                        <.input
-                          field={@credential_form[:refresh_scope]}
-                          label="Scope"
-                          placeholder="channels:read chat:write"
-                        />
+                        <.input field={@credential_form[:refresh_scope]} label="Scope" />
                         <.input
                           field={@credential_form[:token_endpoint_auth_type]}
-                          type="select"
-                          label="Token endpoint auth"
-                          options={token_endpoint_auth_type_options()}
+                          label="Auth Type"
+                          placeholder="client_secret_post"
                         />
                         <.input
                           field={@credential_form[:client_secret]}
                           type="password"
-                          label={secret_label(@selected_credential, "Client secret")}
-                          placeholder={
-                            secret_placeholder(@selected_credential, "Enter a client secret")
-                          }
+                          label={secret_label(@selected_credential, "Client Secret")}
+                          placeholder={secret_placeholder(@selected_credential, "")}
                         />
                       </div>
-                    </div>
+                    </details>
                   </div>
 
-                  <div class="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-4">
-                    <.input
-                      field={@credential_form[:metadata_json]}
-                      type="textarea"
-                      label="Metadata JSON"
-                      rows="7"
-                      placeholder={"{\n  \"provider\": \"slack\"\n}"}
-                    />
-                    <p class="mt-2 text-sm leading-6 text-neutral-500">
-                      Optional public metadata returned in safe credential responses. Secret material never appears here.
-                    </p>
-                  </div>
+                  <.input
+                    field={@credential_form[:metadata_json]}
+                    type="textarea"
+                    label="Metadata JSON"
+                    rows="2"
+                  />
 
-                  <div class="flex flex-wrap gap-3">
+                  <div class="flex flex-wrap gap-2">
                     <.button
                       id="credential-save-button"
-                      class="rounded-full bg-sky-600 px-5 text-white hover:bg-sky-500"
+                      class="console-button console-button-primary"
                     >
-                      {credential_submit_label(@selected_credential)}
+                      {if @selected_credential, do: "Rotate Credential", else: "Create Credential"}
                     </.button>
-                    <.button
-                      :if={@selected_credential}
+                    <.link
                       patch={~p"/console/vaults/#{@selected_vault.id}"}
-                      class="rounded-full border border-neutral-300 bg-white px-5 text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
+                      class="console-button console-button-secondary"
                     >
-                      Back to new credential
-                    </.button>
+                      Cancel
+                    </.link>
                   </div>
                 </.form>
               </div>
             </div>
-          </div>
+          <% else %>
+            <.empty_state
+              title="No vault selected"
+              description="Select a vault from the list or create a new one."
+            />
+          <% end %>
         </section>
       </div>
     </Layouts.app>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :value, :integer, required: true
-
-  defp metric_card(assigns) do
-    ~H"""
-    <div>
-      <p class="text-xs uppercase tracking-[0.2em] text-sky-100/70">{@label}</p>
-      <p class="mt-2 text-3xl font-semibold tracking-tight">{@value}</p>
-    </div>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :active, :boolean, default: false
-  attr :navigate, :string, default: nil
-
-  defp console_tab(%{navigate: nil} = assigns) do
-    ~H"""
-    <span class="inline-flex items-center rounded-full border border-white/15 bg-white/12 px-4 py-2 text-sm font-medium text-white">
-      {@label}
-    </span>
-    """
-  end
-
-  defp console_tab(assigns) do
-    ~H"""
-    <.link
-      navigate={@navigate}
-      class={[
-        "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition",
-        @active && "border border-white/15 bg-white/12 text-white",
-        !@active &&
-          "border border-white/10 bg-black/10 text-white/75 hover:bg-white/10 hover:text-white"
-      ]}
-    >
-      {@label}
-    </.link>
     """
   end
 
@@ -753,6 +588,8 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
     socket
     |> assign(:vaults, list_vaults(actor))
     |> assign(:total_credential_count, count_credentials(actor))
+    |> assign(:show_create_vault, false)
+    |> assign(:show_credential_form, false)
     |> assign(:vault_errors, [])
     |> assign_vault_form(default_vault_params())
     |> put_flash(:info, "Vault created.")
@@ -945,6 +782,7 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
     |> assign(:total_credential_count, count_credentials(actor))
     |> assign(:credentials, list_credentials(vault, actor))
     |> assign(:selected_credential, nil)
+    |> assign(:show_credential_form, false)
     |> assign(:credential_errors, [])
     |> assign_credential_form(default_credential_params())
     |> put_flash(:info, credential_saved_message(socket.assigns.selected_credential))
@@ -1001,30 +839,6 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
     serialized.display_name || vault.name
   end
 
-  defp vault_card_class(vault, selected_vault) do
-    selected? = selected_vault && selected_vault.id == vault.id
-
-    [
-      "rounded-[1.5rem] border p-4 transition",
-      if(selected?,
-        do: "border-sky-300 bg-sky-50/70 shadow-sm shadow-sky-100",
-        else: "border-neutral-200 bg-white hover:border-sky-200 hover:bg-sky-50/40"
-      )
-    ]
-  end
-
-  defp credential_card_class(credential, selected_credential) do
-    selected? = selected_credential && selected_credential.id == credential.id
-
-    [
-      "rounded-[1.25rem] border p-4 transition",
-      if(selected?,
-        do: "border-sky-300 bg-sky-100/60 shadow-sm shadow-sky-100",
-        else: "border-neutral-200 bg-white hover:border-sky-200 hover:bg-sky-50/50"
-      )
-    ]
-  end
-
   defp credential_display_name(credential) do
     serialized = CredentialDefinition.serialize_credential(credential)
     serialized[:display_name] || credential.mcp_server_url
@@ -1040,34 +854,9 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
     end
   end
 
-  defp credential_type_badge_class(%Credential{type: :static_bearer}) do
-    "inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-emerald-900"
-  end
-
-  defp credential_type_badge_class(%Credential{type: :mcp_oauth}) do
-    "inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-violet-900"
-  end
-
   defp credential_type(form_params) do
     Map.get(form_params, "type", "mcp_oauth")
   end
-
-  defp credential_mode_label(nil), do: "Add credential"
-  defp credential_mode_label(_credential), do: "Rotate credential"
-
-  defp credential_form_title(nil), do: "New credential"
-  defp credential_form_title(_credential), do: "Rotate credential"
-
-  defp credential_form_description(nil) do
-    "Create a safe routing record for one MCP server URL. Secret inputs are stored as provided and never shown again."
-  end
-
-  defp credential_form_description(_credential) do
-    "Rotation updates secret values and public metadata only. Immutable auth routing fields stay locked so existing session matching does not drift."
-  end
-
-  defp credential_submit_label(nil), do: "Save credential"
-  defp credential_submit_label(_credential), do: "Rotate credential"
 
   defp credential_saved_message(nil), do: "Credential saved."
   defp credential_saved_message(_credential), do: "Credential rotated."
@@ -1078,22 +867,25 @@ defmodule JidoManagedAgentsWeb.VaultConsoleLive do
   defp secret_placeholder(nil, placeholder), do: placeholder
   defp secret_placeholder(_credential, placeholder), do: "#{placeholder} or leave blank"
 
+  defp selected_vault?(nil, _vault), do: false
+  defp selected_vault?(%Vault{id: id}, %Vault{id: id}), do: true
+  defp selected_vault?(_selected_vault, _vault), do: false
+
+  defp credential_count(vault, %Vault{id: id}, credentials) when vault.id == id,
+    do: length(credentials)
+
+  defp credential_count(_vault, _selected_vault, _credentials), do: 0
+
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {key, value} -> {to_string(key), value} end)
   end
+
+  defp stringify_keys(value), do: value
 
   defp credential_type_options do
     [
       {"MCP OAuth", "mcp_oauth"},
       {"Static bearer token", "static_bearer"}
-    ]
-  end
-
-  defp token_endpoint_auth_type_options do
-    [
-      {"Client secret in POST body", "client_secret_post"},
-      {"HTTP Basic auth", "client_secret_basic"},
-      {"Public client / none", "none"}
     ]
   end
 end
