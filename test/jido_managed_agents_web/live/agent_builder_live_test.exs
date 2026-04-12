@@ -48,10 +48,13 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
     {:ok, view, _html} = live(conn, ~p"/console/agents/new")
 
     assert has_element?(view, "#agent-builder-form")
+    render_click(element(view, "button[phx-value-section='capabilities']"))
     assert has_element?(view, "#add-tool-button")
     assert has_element?(view, "#add-mcp-server-button")
     assert has_element?(view, "#add-skill-button")
     assert has_element?(view, "#add-callable-agent-button")
+
+    render_click(element(view, "button[phx-click='toggle_preview_expanded']"))
     assert has_element?(view, "#api-preview")
     assert has_element?(view, "#yaml-preview")
 
@@ -90,7 +93,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
 
     assert updated_agent.latest_version.version == 2
     assert updated_agent.latest_version.name == "Research Coordinator v2"
-    assert element(edit_view, "#version-list") |> render() =~ "Version 2"
+    render_click(element(edit_view, "button[phx-click='toggle_version_history']"))
+    assert element(edit_view, "#version-list") |> render() =~ "v2"
   end
 
   test "launches a session inline and streams output without leaving the page", %{conn: conn} do
@@ -103,6 +107,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
     vault = create_vault!(user)
 
     {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}/edit")
+
+    render_click(element(view, "button[phx-value-section='testrun']"))
 
     render_submit(element(view, "#agent-runner-form"), %{
       "runner" => %{
@@ -142,6 +148,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
       create_session!(user, agent, version, environment, workspace, %{title: "Existing Session"})
 
     {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}/edit")
+
+    render_click(element(view, "button[phx-value-section='testrun']"))
 
     render_submit(element(view, "#agent-runner-form"), %{
       "runner" => %{

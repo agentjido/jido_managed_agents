@@ -1,30 +1,12 @@
 defmodule JidoManagedAgentsWeb.Layouts do
   @moduledoc """
-  This module holds layouts and related functionality
-  used by your application.
+  Layouts and shared shell components for the application.
   """
+
   use JidoManagedAgentsWeb, :html
 
-  # Embed all files in layouts/* within this module.
-  # The default root.html.heex file contains the HTML
-  # skeleton of your application, namely HTML headers
-  # and other static content.
   embed_templates "layouts/*"
 
-  @doc """
-  Renders your app layout.
-
-  This function is typically invoked from every template,
-  and it often contains your application menu, sidebar,
-  or similar.
-
-  ## Examples
-
-      <Layouts.app flash={@flash}>
-        <h1>Content</h1>
-      </Layouts.app>
-
-  """
   attr :flash, :map, required: true, doc: "the map of flash messages"
 
   attr :current_scope, :map,
@@ -36,85 +18,151 @@ defmodule JidoManagedAgentsWeb.Layouts do
     doc: "the currently authenticated user"
 
   attr :main_class, :string,
-    default: "px-4 py-20 sm:px-6 lg:px-8",
+    default: "px-4 py-6 sm:px-6 lg:px-8",
     doc: "optional classes for the main wrapper"
 
   attr :container_class, :string,
-    default: "mx-auto max-w-2xl space-y-4",
+    default: "mx-auto max-w-7xl space-y-6",
     doc: "optional classes for the inner content container"
+
+  attr :section, :atom,
+    default: :overview,
+    doc: "the active console section"
+
+  attr :pending_count, :integer,
+    default: 0,
+    doc: "number of sessions awaiting user input"
 
   slot :inner_block, required: true
 
   def app(assigns) do
+    assigns = assign(assigns, :nav_items, console_nav_items())
+
     ~H"""
-    <div class="min-h-screen bg-base-200 text-base-content">
-      <div class="sticky top-0 z-40 border-b border-base-300/80 bg-base-100/90 backdrop-blur">
-        <.navbar class="mx-auto max-w-7xl gap-3 px-3 sm:px-6 lg:px-8">
-          <:navbar_start class="gap-2">
-            <.dropdown class="lg:hidden">
-              <label tabindex="0" class="btn btn-ghost btn-sm btn-circle">
-                <.icon name="hero-bars-3" class="size-5" />
-              </label>
-              <.menu
-                tabindex="0"
-                class="dropdown-content menu-sm z-[60] mt-3 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
-              >
-                <li><.link navigate={~p"/console/agents/new"}>Agents</.link></li>
-                <li><.link navigate={~p"/console/environments"}>Environments</.link></li>
-                <li><.link navigate={~p"/console/vaults"}>Vaults</.link></li>
-                <li><.link navigate={~p"/console/sessions"}>Sessions</.link></li>
-              </.menu>
-            </.dropdown>
+    <div class="console-shell">
+      <aside class="console-sidebar console-lg-up-flex">
+        <div class="console-sidebar-inner">
+          <.console_brand />
 
-            <.link navigate={~p"/console/agents/new"} class="flex items-center gap-3">
-              <span class="flex size-10 items-center justify-center rounded-box bg-primary/12 ring-1 ring-primary/20">
-                <img src={~p"/images/logo.svg"} alt="" class="size-6" />
-              </span>
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-semibold tracking-tight">
-                  Managed Agents
-                </span>
-                <span class="block truncate text-xs text-base-content/60">Runtime console</span>
-              </span>
-            </.link>
-          </:navbar_start>
+          <nav class="space-y-1">
+            <.nav_link
+              :for={item <- @nav_items}
+              item={item}
+              active={item.id == @section}
+              pending_count={@pending_count}
+            />
+          </nav>
 
-          <:navbar_center class="hidden flex-1 lg:flex">
-            <.menu direction="horizontal" class="rounded-box bg-base-200 p-1 text-sm">
-              <li><.link navigate={~p"/console/agents/new"}>Agents</.link></li>
-              <li><.link navigate={~p"/console/environments"}>Environments</.link></li>
-              <li><.link navigate={~p"/console/vaults"}>Vaults</.link></li>
-              <li><.link navigate={~p"/console/sessions"}>Sessions</.link></li>
-            </.menu>
-          </:navbar_center>
+          <div class="console-sidebar-footer">
+            <p class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-faint)]">
+              Runtime
+            </p>
+            <p class="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+              Native Phoenix and LiveView console for managed agents, sessions, environments, and vault-backed credentials.
+            </p>
+          </div>
+        </div>
+      </aside>
 
-          <:navbar_end class="gap-2">
-            <span
-              :if={@current_user}
-              class="hidden rounded-full border border-base-300 bg-base-100 px-3 py-1 text-xs font-medium text-base-content/70 md:inline-flex"
+      <div
+        id="console-mobile-backdrop"
+        class="console-mobile-backdrop hidden"
+        phx-click={
+          JS.hide(to: "#console-mobile-backdrop")
+          |> JS.hide(to: "#console-mobile-sheet")
+          |> JS.remove_class("overflow-hidden", to: "body")
+        }
+      />
+
+      <aside id="console-mobile-sheet" class="console-mobile-sheet hidden">
+        <div class="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-4">
+          <.console_brand compact />
+
+          <button
+            type="button"
+            class="console-icon-button"
+            phx-click={
+              JS.hide(to: "#console-mobile-backdrop")
+              |> JS.hide(to: "#console-mobile-sheet")
+              |> JS.remove_class("overflow-hidden", to: "body")
+            }
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </div>
+
+        <nav class="space-y-1 px-3 py-4">
+          <.mobile_nav_link
+            :for={item <- @nav_items}
+            item={item}
+            active={item.id == @section}
+            pending_count={@pending_count}
+          />
+        </nav>
+      </aside>
+
+      <div class="console-frame">
+        <header class="console-topbar">
+          <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="console-icon-button console-mobile-only-inline-flex"
+              phx-click={
+                JS.show(to: "#console-mobile-backdrop")
+                |> JS.show(to: "#console-mobile-sheet")
+                |> JS.add_class("overflow-hidden", to: "body")
+              }
             >
+              <.icon name="hero-bars-3" class="size-5" />
+            </button>
+
+            <span class="console-environment-chip console-sm-up-inline-flex">local · v0.1.0</span>
+
+            <.link
+              :if={@pending_count > 0}
+              navigate={~p"/console/sessions"}
+              class="console-alert-chip"
+            >
+              <.icon name="hero-exclamation-circle" class="size-4" />
+              {@pending_count} awaiting input
+            </.link>
+          </div>
+
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="console-md-up-flex">
+              <.theme_toggle />
+            </div>
+
+            <span :if={@current_user} class="console-user-chip console-md-up-inline-flex">
               {@current_user.email}
             </span>
-
-            <.theme_toggle />
 
             <.link
               :if={@current_user}
               href={~p"/sign-out"}
               method="delete"
-              class="btn btn-sm btn-ghost"
+              class="console-button console-button-secondary"
             >
               Sign out
             </.link>
-          </:navbar_end>
-        </.navbar>
-      </div>
+          </div>
+        </header>
 
-      <main class={@main_class}>
-        <div class={@container_class}>
-          {render_slot(@inner_block)}
-        </div>
-      </main>
+        <main class={["console-page", @main_class]}>
+          <div class={@container_class}>
+            {render_slot(@inner_block)}
+          </div>
+        </main>
+
+        <nav class="console-bottom-nav">
+          <.bottom_nav_link
+            :for={item <- bottom_nav_items(@nav_items)}
+            item={item}
+            active={item.id == @section}
+            pending_count={@pending_count}
+          />
+        </nav>
+      </div>
 
       <DaisyUIComponents.Flash.flash_group flash={@flash} />
     </div>
@@ -122,39 +170,151 @@ defmodule JidoManagedAgentsWeb.Layouts do
   end
 
   @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
+  Light, dark, and system theme toggle.
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
+    <div class="console-theme-toggle" role="group" aria-label="Theme">
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="console-theme-option"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-computer-desktop" class="size-4" />
+        <span>System</span>
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="console-theme-option"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-sun" class="size-4" />
+        <span>Light</span>
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="console-theme-option"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-moon" class="size-4" />
+        <span>Dark</span>
       </button>
     </div>
     """
+  end
+
+  attr :compact, :boolean, default: false
+
+  defp console_brand(assigns) do
+    ~H"""
+    <.link navigate={~p"/console"} class={["console-brand", @compact && "min-w-0"]}>
+      <span class="console-brand-mark">
+        <img src={~p"/images/logo.svg"} alt="" class="size-5" />
+      </span>
+      <span :if={!@compact} class="min-w-0">
+        <span class="console-brand-label">Jido Managed Agents</span>
+        <span class="console-brand-copy">Operator console</span>
+      </span>
+    </.link>
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :active, :boolean, required: true
+  attr :pending_count, :integer, default: 0
+
+  defp nav_link(assigns) do
+    ~H"""
+    <.link navigate={@item.path} class={["console-nav-link", @active && "console-nav-link-active"]}>
+      <span class="flex items-center gap-3">
+        <.icon name={@item.icon} class="size-4 shrink-0" />
+        <span>{@item.label}</span>
+      </span>
+      <span
+        :if={@item.id == :sessions and @pending_count > 0}
+        class="console-nav-count"
+      >
+        {@pending_count}
+      </span>
+    </.link>
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :active, :boolean, required: true
+  attr :pending_count, :integer, default: 0
+
+  defp mobile_nav_link(assigns) do
+    ~H"""
+    <.link
+      navigate={@item.path}
+      class={["console-mobile-nav-link", @active && "console-mobile-nav-link-active"]}
+      phx-click={
+        JS.hide(to: "#console-mobile-backdrop")
+        |> JS.hide(to: "#console-mobile-sheet")
+        |> JS.remove_class("overflow-hidden", to: "body")
+      }
+    >
+      <span class="flex items-center gap-3">
+        <.icon name={@item.icon} class="size-5 shrink-0" />
+        <span>{@item.label}</span>
+      </span>
+      <span
+        :if={@item.id == :sessions and @pending_count > 0}
+        class="console-nav-count"
+      >
+        {@pending_count}
+      </span>
+    </.link>
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :active, :boolean, required: true
+  attr :pending_count, :integer, default: 0
+
+  defp bottom_nav_link(assigns) do
+    ~H"""
+    <.link
+      navigate={@item.path}
+      class={["console-bottom-link", @active && "console-bottom-link-active"]}
+    >
+      <span class="relative">
+        <.icon name={@item.icon} class="size-5" />
+        <span
+          :if={@item.id == :sessions and @pending_count > 0}
+          class="console-bottom-count"
+        >
+          {@pending_count}
+        </span>
+      </span>
+      <span>{@item.label}</span>
+    </.link>
+    """
+  end
+
+  defp console_nav_items do
+    [
+      %{id: :overview, label: "Overview", path: ~p"/console", icon: "hero-squares-2x2"},
+      %{id: :agents, label: "Agents", path: ~p"/console/agents", icon: "hero-cpu-chip"},
+      %{
+        id: :environments,
+        label: "Environments",
+        path: ~p"/console/environments",
+        icon: "hero-server-stack"
+      },
+      %{id: :vaults, label: "Vaults", path: ~p"/console/vaults", icon: "hero-lock-closed"},
+      %{id: :sessions, label: "Sessions", path: ~p"/console/sessions", icon: "hero-bolt"},
+      %{id: :api, label: "API Docs", path: ~p"/console/api-docs", icon: "hero-code-bracket"}
+    ]
+  end
+
+  defp bottom_nav_items(items) do
+    Enum.filter(items, &(&1.id in [:overview, :agents, :sessions, :api]))
   end
 end

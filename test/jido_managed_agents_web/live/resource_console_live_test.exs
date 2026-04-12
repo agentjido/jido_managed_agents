@@ -46,7 +46,7 @@ defmodule JidoManagedAgentsWeb.ResourceConsoleLiveTest do
     {:ok, edit_view, edit_html} =
       live(conn, ~p"/console/environments/#{created_environment.id}/edit")
 
-    assert edit_html =~ "Edit environment"
+    assert edit_html =~ "Edit: Delivery Sandbox"
 
     render_submit(element(edit_view, "#environment-form"), %{
       "environment" =>
@@ -77,6 +77,8 @@ defmodule JidoManagedAgentsWeb.ResourceConsoleLiveTest do
     assert html =~ "Vaults"
     refute html =~ "Other User Vault"
 
+    render_click(element(view, "button[phx-click='toggle_create_vault']"))
+
     render_submit(element(view, "#vault-form"), %{
       "vault" => vault_params("Alice Vault")
     })
@@ -84,9 +86,11 @@ defmodule JidoManagedAgentsWeb.ResourceConsoleLiveTest do
     vault = get_vault_by_name!(user, "Alice Vault")
 
     assert_patch(view, ~p"/console/vaults/#{vault.id}")
-    assert render(view) =~ "Write-only secret fields"
+    assert render(view) =~ "Secrets are write-only. Stored values cannot be retrieved."
 
     access_token = "lin_api_#{System.unique_integer([:positive])}"
+
+    render_click(element(view, "#show-credential-form-button"))
 
     render_submit(element(view, "#credential-form"), %{
       "credential" => static_credential_params("Linear API key", access_token)
@@ -124,7 +128,7 @@ defmodule JidoManagedAgentsWeb.ResourceConsoleLiveTest do
     {:ok, view, html} =
       live(conn, ~p"/console/vaults/#{vault.id}/credentials/#{credential.id}/rotate")
 
-    assert html =~ "Locked fields"
+    assert html =~ "Locked routing fields"
     assert html =~ "leave blank to keep current"
 
     render_submit(element(view, "#credential-form"), %{

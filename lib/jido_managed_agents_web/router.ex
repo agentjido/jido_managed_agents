@@ -54,12 +54,16 @@ defmodule JidoManagedAgentsWeb.Router do
     pipe_through(:browser)
 
     ash_authentication_live_session :authenticated_routes do
+      live("/console", OverviewLive, :index)
+      live("/console/agents", AgentsLibraryLive, :index)
       live("/console/agents/new", AgentBuilderLive, :new)
       live("/console/agents/:id/edit", AgentBuilderLive, :edit)
+      live("/console/agents/:id", AgentDetailLive, :show)
       live("/console/environments", EnvironmentConsoleLive, :index)
       live("/console/environments/:id/edit", EnvironmentConsoleLive, :edit)
       live("/console/sessions", SessionObservabilityLive, :index)
       live("/console/sessions/:id", SessionObservabilityLive, :show)
+      live("/console/api-docs", ApiDocsLive, :index)
       live("/console/vaults", VaultConsoleLive, :index)
 
       live(

@@ -24,6 +24,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
   alias JidoManagedAgents.Sessions.SessionStream
   alias JidoManagedAgents.Sessions.SessionVault
   alias JidoManagedAgents.Sessions.Workspace
+  alias JidoManagedAgentsWeb.ConsoleHelpers
 
   @preview_event_limit 200
 
@@ -52,6 +53,11 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       |> assign(:runner_task, nil)
       |> assign(:current_session, nil)
       |> assign(:page_title, "New Agent")
+      |> assign(:builder_sections, MapSet.new(["basics"]))
+      |> assign(:preview_tab, "json")
+      |> assign(:preview_expanded, false)
+      |> assign(:show_archive_confirm, false)
+      |> assign(:show_version_history, false)
       |> assign_builder(default_draft())
       |> assign_runner(default_runner_params(environments))
 
@@ -113,6 +119,35 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
   @impl true
   def handle_event("validate_builder", %{"agent" => params}, socket) do
     {:noreply, assign_builder(socket, params)}
+  end
+
+  def handle_event("toggle_builder_section", %{"section" => section}, socket) do
+    sections = socket.assigns.builder_sections
+
+    next_sections =
+      if MapSet.member?(sections, section) do
+        MapSet.delete(sections, section)
+      else
+        MapSet.put(sections, section)
+      end
+
+    {:noreply, assign(socket, :builder_sections, next_sections)}
+  end
+
+  def handle_event("set_preview_tab", %{"tab" => tab}, socket) when tab in ["json", "yaml"] do
+    {:noreply, assign(socket, :preview_tab, tab)}
+  end
+
+  def handle_event("toggle_preview_expanded", _params, socket) do
+    {:noreply, update(socket, :preview_expanded, &(!&1))}
+  end
+
+  def handle_event("toggle_archive_confirm", _params, socket) do
+    {:noreply, update(socket, :show_archive_confirm, &(!&1))}
+  end
+
+  def handle_event("toggle_version_history", _params, socket) do
+    {:noreply, update(socket, :show_version_history, &(!&1))}
   end
 
   def handle_event("add-item", %{"section" => section}, socket) do
@@ -182,6 +217,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
         {:noreply,
          socket
          |> assign(:agent, agent)
+         |> assign(:show_archive_confirm, false)
          |> put_flash(:info, "Agent archived.")}
 
       {:error, error} ->
@@ -301,497 +337,580 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      main_class="px-4 py-8 sm:px-6 lg:px-8"
-      container_class="mx-auto max-w-7xl space-y-8"
+      section={:agents}
+      main_class="px-4 py-6 sm:px-6 lg:px-8"
+      container_class="mx-auto max-w-7xl space-y-6"
     >
-      <section class="overflow-hidden rounded-[2rem] border border-neutral-200 bg-gradient-to-br from-stone-950 via-neutral-900 to-neutral-800 text-stone-50 shadow-2xl shadow-neutral-950/20">
-        <div class="grid gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:px-10">
-          <div class="space-y-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-orange-300">
-              Console Builder
-            </p>
-            <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              {@page_title}
-            </h1>
-            <p class="max-w-2xl text-sm leading-6 text-stone-300">
-              Shape the agent, inspect the exact request body and YAML, then run a live session against the same workspace without leaving the page.
-            </p>
-          </div>
-          <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-stone-200 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <div>
-              <p class="text-xs uppercase tracking-[0.2em] text-stone-400">Mode</p>
-              <p class="mt-2 font-medium">{if @agent, do: "Edit", else: "Create"}</p>
-            </div>
-            <div>
-              <p class="text-xs uppercase tracking-[0.2em] text-stone-400">Version</p>
-              <p class="mt-2 font-medium">
-                {if @agent, do: @agent.latest_version.version, else: "Draft"}
-              </p>
-            </div>
-            <div>
-              <p class="text-xs uppercase tracking-[0.2em] text-stone-400">Filename</p>
-              <p class="mt-2 font-medium">{@recommended_filename}</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <.page_header
+        title={if(@agent, do: "Edit: #{@page_title}", else: "New Agent")}
+        description={
+          if @agent,
+            do: "Version #{@agent.latest_version.version} · #{ConsoleHelpers.agent_model(@agent)}",
+            else: "Configure a new agent"
+        }
+      >
+        <:actions>
+          <button
+            :if={@agent}
+            type="button"
+            id="agent-archive-button"
+            phx-click="toggle_archive_confirm"
+            class="console-button console-button-secondary"
+          >
+            Archive
+          </button>
+          <button
+            id="agent-save-button"
+            type="submit"
+            form="agent-builder-form"
+            class="console-button console-button-primary"
+          >
+            {if @agent, do: "Save New Version", else: "Create Agent"}
+          </button>
+        </:actions>
+      </.page_header>
 
-      <div class="grid gap-8 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-        <div class="space-y-8">
+      <div
+        :if={@show_archive_confirm}
+        class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-4"
+      >
+        <p class="text-sm font-medium text-[var(--text-strong)]">Archive this agent?</p>
+        <p class="mt-1 text-xs text-[var(--text-muted)]">
+          Archived agents cannot be used in new sessions.
+        </p>
+        <div class="mt-3 flex gap-2">
+          <button
+            type="button"
+            phx-click="archive_agent"
+            class="console-button console-button-primary"
+          >
+            Confirm Archive
+          </button>
+          <button
+            type="button"
+            phx-click="toggle_archive_confirm"
+            class="console-button console-button-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-5">
+        <div class="space-y-3 lg:col-span-3">
           <.form
             for={@builder_form}
             id="agent-builder-form"
             phx-change="validate_builder"
             phx-submit="save_agent"
+            class="space-y-3"
           >
-            <div class="space-y-6 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-              <div class="flex flex-wrap items-center justify-between gap-3">
+            <div
+              :if={@builder_errors != []}
+              id="builder-errors"
+              class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-4 text-sm text-[var(--text-strong)]"
+            >
+              <p class="font-medium">The current draft has validation issues.</p>
+              <ul class="mt-2 space-y-1">
+                <li :for={error <- @builder_errors}>{error}</li>
+              </ul>
+            </div>
+
+            <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+              <button
+                type="button"
+                phx-click="toggle_builder_section"
+                phx-value-section="basics"
+                class="flex w-full items-center justify-between p-4 text-left"
+              >
                 <div>
-                  <h2 class="text-xl font-semibold tracking-tight text-neutral-900">Builder</h2>
-                  <p class="mt-1 text-sm text-neutral-600">
-                    Structured sections keep the draft aligned with the Anthropic-compatible API contract.
+                  <h2 class="text-sm font-semibold text-[var(--text-strong)]">Basics</h2>
+                  <p class="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    Name, model, and system prompt
                   </p>
                 </div>
-                <div class="flex flex-wrap gap-3">
-                  <.button
-                    id="agent-save-button"
-                    class="rounded-full bg-neutral-900 px-5 text-white hover:bg-neutral-800"
-                  >
-                    {if @agent, do: "Save New Version", else: "Create Agent"}
-                  </.button>
-                  <.button
-                    :if={@agent}
-                    type="button"
-                    id="agent-archive-button"
-                    phx-click="archive_agent"
-                    class="rounded-full border border-neutral-300 bg-white px-5 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900"
-                  >
-                    Archive
-                  </.button>
-                </div>
-              </div>
+                <.icon
+                  name={
+                    if(section_open?(@builder_sections, "basics"),
+                      do: "hero-chevron-down",
+                      else: "hero-chevron-right"
+                    )
+                  }
+                  class="size-4 shrink-0 text-[var(--text-muted)]"
+                />
+              </button>
 
               <div
-                :if={@builder_errors != []}
-                id="builder-errors"
-                class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+                :if={section_open?(@builder_sections, "basics")}
+                class="border-t border-[var(--border-subtle)] px-4 pb-4 pt-3"
               >
-                <p class="font-medium">The current draft has validation issues.</p>
-                <ul class="mt-2 space-y-1">
-                  <li :for={error <- @builder_errors}>{error}</li>
-                </ul>
-              </div>
+                <div class="space-y-4">
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <.input field={@builder_form[:name]} label="Name" placeholder="My Agent" />
+                    <.input
+                      field={@builder_form[:description]}
+                      label="Description"
+                      placeholder="What does this agent do?"
+                    />
+                  </div>
 
-              <section class="grid gap-6 rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5 md:grid-cols-2">
-                <div class="md:col-span-2">
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                    Identity
-                  </p>
-                </div>
-                <.input field={@builder_form[:name]} label="Name" placeholder="Research Coordinator" />
-                <.input
-                  field={@builder_form[:description]}
-                  label="Description"
-                  placeholder="What this agent is responsible for"
-                />
-                <div class="md:col-span-2">
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                    Model
-                  </p>
-                </div>
-                <.inputs_for :let={model_form} field={@builder_form[:model]}>
-                  <.input field={model_form[:provider]} label="Provider" placeholder="anthropic" />
-                  <.input field={model_form[:id]} label="Model ID" placeholder="claude-sonnet-4-6" />
-                  <.input field={model_form[:speed]} label="Speed" placeholder="standard" />
-                </.inputs_for>
-                <div class="md:col-span-2">
+                  <.inputs_for :let={model_form} field={@builder_form[:model]}>
+                    <div class="grid gap-4 sm:grid-cols-3">
+                      <.input
+                        field={model_form[:provider]}
+                        label="Provider"
+                        placeholder="anthropic"
+                      />
+                      <.input
+                        field={model_form[:id]}
+                        label="Model ID"
+                        placeholder="claude-sonnet-4-20250514"
+                      />
+                      <.input field={model_form[:speed]} label="Speed" placeholder="standard" />
+                    </div>
+                  </.inputs_for>
+
                   <.input
                     field={@builder_form[:system]}
                     type="textarea"
-                    rows="6"
-                    label="System Prompt"
-                    placeholder="You are a precise operator."
-                  />
-                </div>
-                <div class="md:col-span-2">
-                  <.input
-                    field={@builder_form[:metadata_json]}
-                    type="textarea"
                     rows="4"
-                    label="Metadata JSON"
-                    placeholder={~s({"team":"platform"})}
+                    label="System Prompt"
+                    placeholder="You are a helpful agent..."
                   />
                 </div>
-              </section>
+              </div>
+            </section>
 
-              <section class="space-y-4 rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                      Tools
-                    </p>
-                    <p class="mt-1 text-sm text-neutral-600">
-                      Built-in toolsets, MCP toolsets, and custom tools.
-                    </p>
-                  </div>
-                  <.button
-                    type="button"
-                    id="add-tool-button"
-                    phx-click="add-item"
-                    phx-value-section="tools"
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900"
-                  >
-                    Add Tool
-                  </.button>
+            <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+              <button
+                type="button"
+                phx-click="toggle_builder_section"
+                phx-value-section="capabilities"
+                class="flex w-full items-center justify-between p-4 text-left"
+              >
+                <div>
+                  <h2 class="text-sm font-semibold text-[var(--text-strong)]">Capabilities</h2>
+                  <p class="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    {length(List.wrap(@draft_params["tools"]))} tools · {length(
+                      List.wrap(@draft_params["mcp_servers"])
+                    )} MCP servers · {length(List.wrap(@draft_params["skills"]))} skills · {length(
+                      List.wrap(@draft_params["callable_agents"])
+                    )} callable agents
+                  </p>
                 </div>
+                <.icon
+                  name={
+                    if(section_open?(@builder_sections, "capabilities"),
+                      do: "hero-chevron-down",
+                      else: "hero-chevron-right"
+                    )
+                  }
+                  class="size-4 shrink-0 text-[var(--text-muted)]"
+                />
+              </button>
 
-                <.inputs_for :let={tool_form} field={@builder_form[:tools]} default={[]}>
-                  <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-neutral-900">Tool {tool_form.index + 1}</p>
-                      <button
-                        type="button"
-                        phx-click="remove-item"
-                        phx-value-section="tools"
-                        phx-value-index={tool_form.index}
-                        class="inline-flex items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-500 transition hover:border-rose-200 hover:text-rose-600"
-                      >
-                        <.icon name="hero-trash" class="size-4" /> Remove
-                      </button>
-                    </div>
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <.input
-                        field={tool_form[:type]}
-                        type="select"
-                        label="Type"
-                        options={[
-                          {"Built-in Toolset", "agent_toolset_20260401"},
-                          {"MCP Toolset", "mcp_toolset"},
-                          {"Custom Tool", "custom"}
-                        ]}
-                      />
+              <div
+                :if={section_open?(@builder_sections, "capabilities")}
+                class="space-y-4 border-t border-[var(--border-subtle)] px-4 pb-4 pt-3"
+              >
+                <div>
+                  <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-medium text-[var(--text-strong)]">Tools</h3>
+                    <button
+                      type="button"
+                      id="add-tool-button"
+                      phx-click="add-item"
+                      phx-value-section="tools"
+                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                    >
+                      <.icon name="hero-plus" class="size-3" /> Add Tool
+                    </button>
+                  </div>
 
-                      <.input
-                        :if={field_value(tool_form[:type]) == "mcp_toolset"}
-                        field={tool_form[:mcp_server_name]}
-                        label="MCP Server Name"
-                        placeholder="docs"
-                      />
+                  <div class="space-y-2">
+                    <.inputs_for :let={tool_form} field={@builder_form[:tools]} default={[]}>
+                      <div class="space-y-2 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-3">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-2">
+                            <.status_badge status={field_value(tool_form[:type])} />
+                            <p class="text-xs font-medium text-[var(--text-strong)]">
+                              Tool {tool_form.index + 1}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            phx-click="remove-item"
+                            phx-value-section="tools"
+                            phx-value-index={tool_form.index}
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                          >
+                            <.icon name="hero-trash" class="size-3.5" />
+                          </button>
+                        </div>
 
-                      <.input
-                        :if={field_value(tool_form[:type]) == "mcp_toolset"}
-                        field={tool_form[:permission_policy]}
-                        type="select"
-                        label="Permission Policy"
-                        options={[
-                          {"Always Ask", "always_ask"},
-                          {"Always Allow", "always_allow"}
-                        ]}
-                      />
+                        <div class="grid gap-2 sm:grid-cols-2">
+                          <.input
+                            field={tool_form[:type]}
+                            type="select"
+                            label="Type"
+                            options={[
+                              {"Built-in Toolset", "agent_toolset_20260401"},
+                              {"MCP Toolset", "mcp_toolset"},
+                              {"Custom Tool", "custom"}
+                            ]}
+                          />
 
-                      <.input
-                        :if={field_value(tool_form[:type]) == "custom"}
-                        field={tool_form[:name]}
-                        label="Tool Name"
-                        placeholder="lookup_release"
-                      />
+                          <.input
+                            :if={field_value(tool_form[:type]) == "mcp_toolset"}
+                            field={tool_form[:mcp_server_name]}
+                            label="MCP Server"
+                            placeholder="server name"
+                          />
 
-                      <.input
-                        :if={field_value(tool_form[:type]) == "custom"}
-                        field={tool_form[:permission_policy]}
-                        type="select"
-                        label="Permission Policy"
-                        options={[
-                          {"Always Ask", "always_ask"},
-                          {"Always Allow", "always_allow"}
-                        ]}
-                      />
+                          <.input
+                            :if={field_value(tool_form[:type]) in ["mcp_toolset", "custom"]}
+                            field={tool_form[:permission_policy]}
+                            type="select"
+                            label="Permission"
+                            options={[
+                              {"Always Ask", "always_ask"},
+                              {"Always Allow", "always_allow"}
+                            ]}
+                          />
 
-                      <div :if={field_value(tool_form[:type]) == "custom"} class="md:col-span-2">
+                          <.input
+                            :if={field_value(tool_form[:type]) == "custom"}
+                            field={tool_form[:name]}
+                            label="Tool Name"
+                            placeholder="lookup_release"
+                          />
+                        </div>
+
                         <.input
+                          :if={field_value(tool_form[:type]) == "custom"}
                           field={tool_form[:description]}
                           label="Description"
                           placeholder="Describe what the tool does"
                         />
-                      </div>
 
-                      <div :if={field_value(tool_form[:type]) == "custom"} class="md:col-span-2">
                         <.input
+                          :if={field_value(tool_form[:type]) == "custom"}
                           field={tool_form[:input_schema_json]}
                           type="textarea"
-                          rows="6"
+                          rows="2"
                           label="Input Schema JSON"
-                          placeholder={~s({"type":"object","properties":{}})}
                         />
-                      </div>
 
-                      <div
-                        :if={field_value(tool_form[:type]) == "agent_toolset_20260401"}
-                        class="md:col-span-2"
-                      >
                         <.input
+                          :if={field_value(tool_form[:type]) == "agent_toolset_20260401"}
                           field={tool_form[:default_config_json]}
                           type="textarea"
-                          rows="4"
-                          label="Default Config JSON"
-                          placeholder={~s({"permission_policy":"always_ask"})}
+                          rows="2"
+                          label="Config JSON"
                         />
-                      </div>
 
-                      <div
-                        :if={field_value(tool_form[:type]) == "agent_toolset_20260401"}
-                        class="md:col-span-2"
-                      >
                         <.input
+                          :if={field_value(tool_form[:type]) == "agent_toolset_20260401"}
                           field={tool_form[:configs_json]}
                           type="textarea"
-                          rows="6"
-                          label="Per-Tool Configs JSON"
-                          placeholder={~s({"write":{"permission_policy":"always_allow"}})}
+                          rows="2"
+                          label="Per-Tool Config JSON"
                         />
                       </div>
-                    </div>
+                    </.inputs_for>
                   </div>
-                </.inputs_for>
-              </section>
-
-              <section class="space-y-4 rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                      MCP Servers
-                    </p>
-                    <p class="mt-1 text-sm text-neutral-600">
-                      Server entries persisted on the agent version.
-                    </p>
-                  </div>
-                  <.button
-                    type="button"
-                    id="add-mcp-server-button"
-                    phx-click="add-item"
-                    phx-value-section="mcp_servers"
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900"
-                  >
-                    Add Server
-                  </.button>
                 </div>
 
-                <.inputs_for :let={server_form} field={@builder_form[:mcp_servers]} default={[]}>
-                  <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-neutral-900">
-                        Server {server_form.index + 1}
-                      </p>
-                      <button
-                        type="button"
-                        phx-click="remove-item"
-                        phx-value-section="mcp_servers"
-                        phx-value-index={server_form.index}
-                        class="inline-flex items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-500 transition hover:border-rose-200 hover:text-rose-600"
-                      >
-                        <.icon name="hero-trash" class="size-4" /> Remove
-                      </button>
-                    </div>
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <.input field={server_form[:type]} label="Type" placeholder="url" />
-                      <.input field={server_form[:name]} label="Name" placeholder="docs" />
-                      <div class="md:col-span-2">
-                        <.input
-                          field={server_form[:url]}
-                          label="URL"
-                          placeholder="https://example.com/mcp"
-                        />
-                      </div>
-                      <div class="md:col-span-2">
-                        <.input
-                          field={server_form[:headers_json]}
-                          type="textarea"
-                          rows="4"
-                          label="Headers JSON"
-                          placeholder={~s({"x-scope":"engineering"})}
-                        />
-                      </div>
-                    </div>
+                <div>
+                  <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-medium text-[var(--text-strong)]">MCP Servers</h3>
+                    <button
+                      type="button"
+                      id="add-mcp-server-button"
+                      phx-click="add-item"
+                      phx-value-section="mcp_servers"
+                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                    >
+                      <.icon name="hero-plus" class="size-3" /> Add
+                    </button>
                   </div>
-                </.inputs_for>
-              </section>
 
-              <section class="space-y-4 rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                      Skills
-                    </p>
-                    <p class="mt-1 text-sm text-neutral-600">
-                      Attach Anthropic or custom skills from the catalog.
-                    </p>
+                  <div class="space-y-2">
+                    <div
+                      :if={List.wrap(@draft_params["mcp_servers"]) == []}
+                      class="text-xs text-[var(--text-muted)]"
+                    >
+                      No MCP servers configured.
+                    </div>
+
+                    <.inputs_for :let={server_form} field={@builder_form[:mcp_servers]} default={[]}>
+                      <div class="space-y-2 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-3">
+                        <div class="flex items-center justify-between">
+                          <.input
+                            field={server_form[:name]}
+                            label="Name"
+                            placeholder="Server name"
+                          />
+                          <button
+                            type="button"
+                            phx-click="remove-item"
+                            phx-value-section="mcp_servers"
+                            phx-value-index={server_form.index}
+                            class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                          >
+                            <.icon name="hero-trash" class="size-3.5" />
+                          </button>
+                        </div>
+                        <.input field={server_form[:url]} label="URL" placeholder="https://..." />
+                      </div>
+                    </.inputs_for>
                   </div>
-                  <.button
-                    type="button"
-                    id="add-skill-button"
-                    phx-click="add-item"
-                    phx-value-section="skills"
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900"
-                  >
-                    Add Skill
-                  </.button>
                 </div>
 
-                <.inputs_for :let={skill_form} field={@builder_form[:skills]} default={[]}>
-                  <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-neutral-900">Skill {skill_form.index + 1}</p>
-                      <button
-                        type="button"
-                        phx-click="remove-item"
-                        phx-value-section="skills"
-                        phx-value-index={skill_form.index}
-                        class="inline-flex items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-500 transition hover:border-rose-200 hover:text-rose-600"
-                      >
-                        <.icon name="hero-trash" class="size-4" /> Remove
-                      </button>
-                    </div>
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <.input
-                        field={skill_form[:type]}
-                        type="select"
-                        label="Skill Type"
-                        options={[{"Custom", "custom"}, {"Anthropic", "anthropic"}]}
-                      />
-                      <.input
-                        field={skill_form[:id]}
-                        type="select"
-                        label="Skill"
-                        options={skill_options(@skills)}
-                      />
-                      <.input
-                        field={skill_form[:version]}
-                        type="number"
-                        min="1"
-                        label="Pinned Version"
-                        placeholder="Latest"
-                      />
-                      <div class="md:col-span-2">
-                        <.input
-                          field={skill_form[:metadata_json]}
-                          type="textarea"
-                          rows="4"
-                          label="Metadata JSON"
-                          placeholder={~s({"audience":"platform"})}
-                        />
-                      </div>
-                    </div>
+                <div>
+                  <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-medium text-[var(--text-strong)]">Skills</h3>
+                    <button
+                      type="button"
+                      id="add-skill-button"
+                      phx-click="add-item"
+                      phx-value-section="skills"
+                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                    >
+                      <.icon name="hero-plus" class="size-3" /> Add
+                    </button>
                   </div>
-                </.inputs_for>
-              </section>
 
-              <section class="space-y-4 rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                      Callable Agents
-                    </p>
-                    <p class="mt-1 text-sm text-neutral-600">
-                      Delegate to other persisted agents in the same session tree.
-                    </p>
+                  <div class="space-y-2">
+                    <div
+                      :if={List.wrap(@draft_params["skills"]) == []}
+                      class="text-xs text-[var(--text-muted)]"
+                    >
+                      No skills attached.
+                    </div>
+
+                    <.inputs_for :let={skill_form} field={@builder_form[:skills]} default={[]}>
+                      <div class="flex items-center gap-2 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-2">
+                        <.input
+                          field={skill_form[:type]}
+                          type="select"
+                          label="Type"
+                          options={[{"Custom", "custom"}, {"Anthropic", "anthropic"}]}
+                        />
+                        <.input
+                          field={skill_form[:id]}
+                          type="select"
+                          label="Skill"
+                          options={skill_options(@skills)}
+                        />
+                        <.input
+                          field={skill_form[:version]}
+                          type="number"
+                          min="1"
+                          label="v"
+                          placeholder="Latest"
+                        />
+                        <button
+                          type="button"
+                          phx-click="remove-item"
+                          phx-value-section="skills"
+                          phx-value-index={skill_form.index}
+                          class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                        >
+                          <.icon name="hero-trash" class="size-3.5" />
+                        </button>
+                      </div>
+                    </.inputs_for>
                   </div>
-                  <.button
-                    type="button"
-                    id="add-callable-agent-button"
-                    phx-click="add-item"
-                    phx-value-section="callable_agents"
-                    class="rounded-full border border-neutral-300 bg-white px-4 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900"
-                  >
-                    Add Callable Agent
-                  </.button>
                 </div>
 
-                <.inputs_for
-                  :let={callable_form}
-                  field={@builder_form[:callable_agents]}
-                  default={[]}
-                >
-                  <div class="rounded-[1.25rem] border border-neutral-200 bg-white p-4">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-neutral-900">
-                        Callable Agent {callable_form.index + 1}
-                      </p>
+                <div>
+                  <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-medium text-[var(--text-strong)]">Callable Agents</h3>
+                    <button
+                      type="button"
+                      id="add-callable-agent-button"
+                      phx-click="add-item"
+                      phx-value-section="callable_agents"
+                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                    >
+                      <.icon name="hero-plus" class="size-3" /> Add
+                    </button>
+                  </div>
+
+                  <div class="space-y-2">
+                    <div
+                      :if={List.wrap(@draft_params["callable_agents"]) == []}
+                      class="text-xs text-[var(--text-muted)]"
+                    >
+                      No callable agents linked.
+                    </div>
+
+                    <.inputs_for
+                      :let={callable_form}
+                      field={@builder_form[:callable_agents]}
+                      default={[]}
+                    >
+                      <div class="flex items-center gap-2 rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-2">
+                        <.input
+                          field={callable_form[:id]}
+                          type="select"
+                          label="Agent"
+                          options={callable_agent_options(@callable_agents, @agent)}
+                        />
+                        <.input
+                          field={callable_form[:version]}
+                          type="number"
+                          min="1"
+                          label="v"
+                          placeholder="Latest"
+                        />
+                        <button
+                          type="button"
+                          phx-click="remove-item"
+                          phx-value-section="callable_agents"
+                          phx-value-index={callable_form.index}
+                          class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                        >
+                          <.icon name="hero-trash" class="size-3.5" />
+                        </button>
+                      </div>
+                    </.inputs_for>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+              <button
+                type="button"
+                phx-click="toggle_builder_section"
+                phx-value-section="advanced"
+                class="flex w-full items-center justify-between p-4 text-left"
+              >
+                <div>
+                  <h2 class="text-sm font-semibold text-[var(--text-strong)]">Advanced</h2>
+                  <p class="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    Metadata and API preview
+                  </p>
+                </div>
+                <.icon
+                  name={
+                    if(section_open?(@builder_sections, "advanced"),
+                      do: "hero-chevron-down",
+                      else: "hero-chevron-right"
+                    )
+                  }
+                  class="size-4 shrink-0 text-[var(--text-muted)]"
+                />
+              </button>
+
+              <div
+                :if={section_open?(@builder_sections, "advanced")}
+                class="space-y-4 border-t border-[var(--border-subtle)] px-4 pb-4 pt-3"
+              >
+                <.input
+                  field={@builder_form[:metadata_json]}
+                  type="textarea"
+                  rows="3"
+                  label="Metadata JSON"
+                />
+
+                <p class="text-[10px] text-[var(--text-muted)]">
+                  Recommended filename: <code class="font-mono">{@recommended_filename}</code>
+                </p>
+
+                <div class="lg:hidden">
+                  <div class="mb-2 flex items-center justify-between">
+                    <div class="flex gap-1">
                       <button
                         type="button"
-                        phx-click="remove-item"
-                        phx-value-section="callable_agents"
-                        phx-value-index={callable_form.index}
-                        class="inline-flex items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-500 transition hover:border-rose-200 hover:text-rose-600"
+                        phx-click="set_preview_tab"
+                        phx-value-tab="json"
+                        class={[
+                          "rounded px-2 py-1 text-xs font-medium",
+                          @preview_tab == "json" && "bg-[var(--text-strong)] text-[var(--panel-bg)]",
+                          @preview_tab != "json" && "text-[var(--text-muted)]"
+                        ]}
                       >
-                        <.icon name="hero-trash" class="size-4" /> Remove
+                        JSON
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="set_preview_tab"
+                        phx-value-tab="yaml"
+                        class={[
+                          "rounded px-2 py-1 text-xs font-medium",
+                          @preview_tab == "yaml" && "bg-[var(--text-strong)] text-[var(--panel-bg)]",
+                          @preview_tab != "yaml" && "text-[var(--text-muted)]"
+                        ]}
+                      >
+                        YAML
                       </button>
                     </div>
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <.input
-                        field={callable_form[:id]}
-                        type="select"
-                        label="Agent"
-                        options={callable_agent_options(@callable_agents, @agent)}
-                      />
-                      <.input
-                        field={callable_form[:version]}
-                        type="number"
-                        min="1"
-                        label="Pinned Version"
-                        placeholder="Latest"
-                      />
-                      <div class="md:col-span-2">
-                        <.input
-                          field={callable_form[:metadata_json]}
-                          type="textarea"
-                          rows="4"
-                          label="Metadata JSON"
-                          placeholder={~s({"handoff":"research"})}
-                        />
-                      </div>
-                    </div>
                   </div>
-                </.inputs_for>
-              </section>
-            </div>
+
+                  <pre
+                    :if={@preview_tab == "json"}
+                    class="console-code-block max-h-[300px] overflow-auto"
+                  ><code>{@api_preview}</code></pre>
+                  <pre
+                    :if={@preview_tab == "yaml"}
+                    class="console-code-block max-h-[300px] overflow-auto"
+                  ><code>{@yaml_preview}</code></pre>
+                </div>
+              </div>
+            </section>
           </.form>
 
-          <section class="space-y-4 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-xl font-semibold tracking-tight text-neutral-900">Session Runner</h2>
-                <p class="mt-1 text-sm text-neutral-600">
-                  The runner uses the agent workspace automatically and keeps the event stream inline.
-                </p>
-              </div>
-              <div
-                :if={@runner_status}
-                class="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white"
-              >
-                {@runner_status}
-              </div>
-            </div>
-
-            <.form
-              for={@runner_form}
-              id="agent-runner-form"
-              phx-change="validate_runner"
-              phx-submit="launch_session"
+          <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+            <button
+              type="button"
+              phx-click="toggle_builder_section"
+              phx-value-section="testrun"
+              class="flex w-full items-center justify-between p-4 text-left"
             >
-              <div class="grid gap-4 md:grid-cols-2">
-                <.input
-                  field={@runner_form[:environment_id]}
-                  type="select"
-                  label="Environment"
-                  prompt="Choose an environment"
-                  options={environment_options(@environments)}
-                />
-                <.input
-                  field={@runner_form[:title]}
-                  label="Session Title"
-                  placeholder="Optional title"
-                />
-                <div class="md:col-span-2">
+              <div>
+                <h2 class="text-sm font-semibold text-[var(--text-strong)]">Test Run</h2>
+                <p class="mt-0.5 text-[11px] text-[var(--text-muted)]">Launch a test session</p>
+              </div>
+              <.icon
+                name={
+                  if(section_open?(@builder_sections, "testrun"),
+                    do: "hero-chevron-down",
+                    else: "hero-chevron-right"
+                  )
+                }
+                class="size-4 shrink-0 text-[var(--text-muted)]"
+              />
+            </button>
+
+            <div
+              :if={section_open?(@builder_sections, "testrun")}
+              class="space-y-4 border-t border-[var(--border-subtle)] px-4 pb-4 pt-3"
+            >
+              <.form
+                for={@runner_form}
+                id="agent-runner-form"
+                phx-change="validate_runner"
+                phx-submit="launch_session"
+              >
+                <div class="space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <.input
+                      field={@runner_form[:environment_id]}
+                      type="select"
+                      label="Environment"
+                      prompt="Select environment"
+                      options={environment_options(@environments)}
+                    />
+                    <.input
+                      field={@runner_form[:title]}
+                      label="Session Title"
+                      placeholder="Optional title"
+                    />
+                  </div>
+
                   <.input
                     field={@runner_form[:vault_ids]}
                     type="select"
@@ -799,134 +918,180 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                     label="Vaults"
                     options={vault_options(@vaults)}
                   />
-                </div>
-                <div class="md:col-span-2">
+
                   <.input
                     field={@runner_form[:prompt]}
                     type="textarea"
-                    rows="5"
+                    rows="3"
                     label="Prompt"
-                    placeholder="Ask the agent to perform a real test run."
+                    placeholder="Enter your prompt..."
                   />
-                </div>
-              </div>
-              <div class="mt-4 flex flex-wrap items-center gap-3">
-                <.button
-                  id="runner-submit-button"
-                  class="rounded-full bg-orange-500 px-5 text-white hover:bg-orange-400"
-                >
-                  {if @current_session, do: "Send To Current Session", else: "Launch Session"}
-                </.button>
-                <p class="text-xs text-neutral-500">
-                  Workspace selection is automatic in v1 and tied to the agent.
-                </p>
-              </div>
-            </.form>
 
-            <div
-              :if={@runner_error}
-              id="runner-error"
-              class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
-            >
-              {@runner_error}
-            </div>
-
-            <div
-              :if={@runner_notice}
-              id="runner-notice"
-              class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
-            >
-              {@runner_notice}
-            </div>
-
-            <div id="runner-events" class="space-y-3">
-              <div
-                :if={@runner_events == []}
-                class="rounded-[1.5rem] border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-500"
-              >
-                Session events will stream here after you start a run.
-              </div>
-
-              <div
-                :for={event <- @runner_events}
-                id={"runner-event-#{event.sequence}"}
-                class="rounded-[1.5rem] border border-neutral-200 bg-neutral-950 px-4 py-4 text-sm text-stone-100 shadow-sm"
-              >
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    <span class="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-300">
-                      {event.type}
-                    </span>
-                    <span class="font-mono text-xs text-stone-400">#{event.sequence}</span>
+                  <div class="flex items-center gap-3">
+                    <.button id="runner-submit-button" class="console-button console-button-primary">
+                      {if @current_session, do: "Send To Current Session", else: "Launch Session"}
+                    </.button>
+                    <p :if={@runner_status} class="text-xs text-[var(--text-muted)]">
+                      {@runner_status}
+                    </p>
                   </div>
-                  <span class="text-xs text-stone-500">{format_timestamp(event.created_at)}</span>
                 </div>
-                <p class="mt-3 whitespace-pre-wrap font-mono text-[13px] leading-6 text-stone-100">
-                  {event_console_body(event)}
-                </p>
+              </.form>
+
+              <div
+                :if={@runner_error}
+                id="runner-error"
+                class="rounded-[8px] border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-4 text-sm text-[var(--text-strong)]"
+              >
+                {@runner_error}
+              </div>
+
+              <div
+                :if={@runner_notice}
+                id="runner-notice"
+                class="rounded-[8px] border border-[var(--accent)]/20 bg-[var(--accent-soft)] p-4 text-sm text-[var(--text-strong)]"
+              >
+                {@runner_notice}
+              </div>
+
+              <div id="runner-events" class="space-y-2">
+                <div
+                  :if={@runner_events == []}
+                  class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] px-4 py-10 text-center text-sm text-[var(--text-muted)]"
+                >
+                  Session events will stream here after you start a run.
+                </div>
+
+                <div
+                  :for={event <- @runner_events}
+                  id={"runner-event-#{event.sequence}"}
+                  class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                      <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                        {event.type}
+                      </span>
+                      <span class="font-mono text-[10px] text-[var(--text-muted)]">
+                        #{event.sequence}
+                      </span>
+                    </div>
+                    <span class="text-[10px] text-[var(--text-muted)]">
+                      {format_timestamp(event.created_at)}
+                    </span>
+                  </div>
+                  <p class="mt-2 whitespace-pre-wrap font-mono text-xs text-[var(--text-strong)]">
+                    {event_console_body(event)}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
         </div>
 
-        <div class="space-y-8">
-          <section class="space-y-4 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h2 class="text-xl font-semibold tracking-tight text-neutral-900">API Preview</h2>
-                <p class="mt-1 text-sm text-neutral-600">
-                  The equivalent request body for the current draft.
-                </p>
-              </div>
-              <span class="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-                JSON
-              </span>
-            </div>
-            <pre
-              id="api-preview"
-              class="overflow-x-auto rounded-[1.5rem] bg-neutral-950 p-4 text-[13px] leading-6 text-stone-100"
-            ><code>{@api_preview}</code></pre>
-          </section>
-
-          <section class="space-y-4 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h2 class="text-xl font-semibold tracking-tight text-neutral-900">YAML Preview</h2>
-                <p class="mt-1 text-sm text-neutral-600">
-                  Anthropic-compatible `*.agent.yaml` output for the same draft.
-                </p>
-              </div>
-              <span class="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-                YAML
-              </span>
-            </div>
-            <pre
-              id="yaml-preview"
-              class="overflow-x-auto rounded-[1.5rem] bg-[#10111a] p-4 text-[13px] leading-6 text-emerald-100"
-            ><code>{@yaml_preview}</code></pre>
-          </section>
-
-          <section
-            :if={@versions != []}
-            class="space-y-4 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm"
-          >
-            <div>
-              <h2 class="text-xl font-semibold tracking-tight text-neutral-900">Versions</h2>
-              <p class="mt-1 text-sm text-neutral-600">Recent persisted versions for this agent.</p>
-            </div>
-            <div id="version-list" class="space-y-3">
-              <div
-                :for={version <- @versions}
-                class="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 px-4 py-3"
+        <div class="hidden lg:block lg:col-span-2">
+          <div class="sticky top-20 space-y-3">
+            <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+              <button
+                type="button"
+                phx-click="toggle_preview_expanded"
+                class="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium text-[var(--text-strong)]"
               >
-                <div class="flex items-center justify-between gap-3">
-                  <p class="font-medium text-neutral-900">Version {version.version}</p>
-                  <span class="text-xs text-neutral-500">{format_timestamp(version.updated_at)}</span>
+                API Preview
+                <.icon
+                  name={if(@preview_expanded, do: "hero-chevron-down", else: "hero-chevron-right")}
+                  class="size-4 text-[var(--text-muted)]"
+                />
+              </button>
+
+              <div :if={@preview_expanded} class="border-t border-[var(--border-subtle)]">
+                <div class="flex items-center justify-between px-4 py-2">
+                  <div class="flex gap-1">
+                    <button
+                      type="button"
+                      phx-click="set_preview_tab"
+                      phx-value-tab="json"
+                      class={[
+                        "rounded px-2 py-1 text-xs font-medium",
+                        @preview_tab == "json" && "bg-[var(--text-strong)] text-[var(--panel-bg)]",
+                        @preview_tab != "json" && "text-[var(--text-muted)]"
+                      ]}
+                    >
+                      JSON
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="set_preview_tab"
+                      phx-value-tab="yaml"
+                      class={[
+                        "rounded px-2 py-1 text-xs font-medium",
+                        @preview_tab == "yaml" && "bg-[var(--text-strong)] text-[var(--panel-bg)]",
+                        @preview_tab != "yaml" && "text-[var(--text-muted)]"
+                      ]}
+                    >
+                      YAML
+                    </button>
+                  </div>
                 </div>
-                <p class="mt-1 text-sm text-neutral-600">{version.name}</p>
+
+                <div class="px-4 pb-3">
+                  <pre
+                    id="api-preview"
+                    class={[
+                      "console-code-block max-h-[400px] overflow-auto",
+                      @preview_tab != "json" && "hidden"
+                    ]}
+                  ><code>{@api_preview}</code></pre>
+                  <pre
+                    id="yaml-preview"
+                    class={[
+                      "console-code-block max-h-[400px] overflow-auto",
+                      @preview_tab != "yaml" && "hidden"
+                    ]}
+                  ><code>{@yaml_preview}</code></pre>
+                </div>
+
+                <div class="border-t border-[var(--border-subtle)] px-4 py-2">
+                  <p class="text-[10px] text-[var(--text-muted)]">
+                    Recommended filename: <code class="font-mono">{@recommended_filename}</code>
+                  </p>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+
+            <section
+              :if={@versions != []}
+              class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)] p-4"
+            >
+              <button
+                type="button"
+                phx-click="toggle_version_history"
+                class="flex w-full items-center justify-between text-sm font-medium text-[var(--text-strong)]"
+              >
+                Version History
+                <.icon
+                  name={
+                    if(@show_version_history, do: "hero-chevron-down", else: "hero-chevron-right")
+                  }
+                  class="size-4 text-[var(--text-muted)]"
+                />
+              </button>
+
+              <div :if={@show_version_history} id="version-list" class="mt-3 space-y-2">
+                <div
+                  :for={version <- @versions}
+                  class="flex items-center justify-between rounded-[8px] border border-[var(--border-subtle)] px-3 py-2 text-xs"
+                >
+                  <span class="font-mono text-[var(--text-strong)]">v{version.version}</span>
+                  <span class="text-[var(--text-muted)]">
+                    {if version.version == @agent.latest_version.version,
+                      do: "Current",
+                      else: format_timestamp(version.updated_at)}
+                  </span>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </Layouts.app>
@@ -1678,6 +1843,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       {"#{agent.name} (v#{latest})", agent.id}
     end)
   end
+
+  defp section_open?(sections, section), do: MapSet.member?(sections, section)
 
   defp networking_label(environment) do
     get_in(environment.config, ["networking", "type"]) || "unknown"

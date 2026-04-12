@@ -47,12 +47,20 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLiveTest do
 
     {:ok, detail_view, detail_html} = live(conn, ~p"/console/sessions/#{session.id}")
 
-    assert detail_html =~ "Trace Timeline"
-    assert detail_html =~ "Tool Execution"
-    assert detail_html =~ "Raw Events"
+    assert detail_html =~ "Transcript"
+    assert detail_html =~ "Debug"
+    assert detail_html =~ "All traces"
+
+    render_click(element(detail_view, "button[phx-value-view='debug']"))
+    render_click(element(detail_view, "button[phx-value-tab='tools']"))
+
     assert element(detail_view, "#session-tool-executions") |> render() =~ "ls -la"
     assert element(detail_view, "#session-tool-executions") |> render() =~ "total 0"
+
+    render_click(element(detail_view, "button[phx-value-tab='raw']"))
     assert element(detail_view, "#session-raw-events") |> render() =~ "agent.message"
+
+    render_click(element(detail_view, "button[phx-value-tab='metrics']"))
 
     metrics_html = element(detail_view, "#session-metrics") |> render()
 
@@ -70,8 +78,13 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLiveTest do
 
     assert html =~ "Latest error"
     assert html =~ "Anthropic request timed out"
+
+    render_click(element(view, "button[phx-value-view='debug']"))
+    render_click(element(view, "button[phx-value-tab='raw']"))
     assert element(view, "#session-raw-events") |> render() =~ "session.error"
-    assert element(view, "#session-metrics") |> render() =~ "No provider metrics were recorded"
+
+    render_click(element(view, "button[phx-value-tab='metrics']"))
+    assert element(view, "#session-metrics") |> render() =~ "No provider metrics"
   end
 
   test "approval-needed sessions render allow and deny controls for blocked tool uses", %{
@@ -91,7 +104,7 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLiveTest do
     assert has_element?(view, "#confirm-deny-#{blocked_tool_use_event.id}")
 
     assert element(view, "#pending-confirmation-#{blocked_tool_use_event.id}") |> render() =~
-             "user.tool_confirmation"
+             "rm -rf tmp/build"
   end
 
   test "threaded sessions support drill-down into thread-specific traces", %{conn: conn} do
@@ -112,6 +125,9 @@ defmodule JidoManagedAgentsWeb.SessionObservabilityLiveTest do
     assert_patch(view, ~p"/console/sessions/#{session.id}?thread_id=#{delegate_thread.id}")
 
     thread_trace = element(view, "#session-trace") |> render()
+
+    render_click(element(view, "button[phx-value-view='debug']"))
+    render_click(element(view, "button[phx-value-tab='raw']"))
     raw_html = element(view, "#session-raw-events") |> render()
 
     assert thread_trace =~ "Delegate trace ready."
