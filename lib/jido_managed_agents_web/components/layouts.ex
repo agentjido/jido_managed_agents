@@ -54,12 +54,23 @@ defmodule JidoManagedAgentsWeb.Layouts do
           </nav>
 
           <div class="console-sidebar-footer">
-            <p class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-faint)]">
-              Runtime
-            </p>
-            <p class="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-              Native Phoenix and LiveView console for managed agents, sessions, environments, and vault-backed credentials.
-            </p>
+            <div class="space-y-6">
+              <div class="space-y-2">
+                <p class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                  Appearance
+                </p>
+                <.theme_toggle />
+              </div>
+
+              <div>
+                <p class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                  Runtime
+                </p>
+                <p class="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+                  Native Phoenix and LiveView console for managed agents, sessions, environments, and vault-backed credentials.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
@@ -129,10 +140,6 @@ defmodule JidoManagedAgentsWeb.Layouts do
           </div>
 
           <div class="flex items-center gap-2 sm:gap-3">
-            <div class="console-md-up-flex">
-              <.theme_toggle />
-            </div>
-
             <span :if={@current_user} class="console-user-chip console-md-up-inline-flex">
               {@current_user.email}
             </span>
@@ -170,7 +177,7 @@ defmodule JidoManagedAgentsWeb.Layouts do
   end
 
   @doc """
-  Light, dark, and system theme toggle.
+  Compact light and dark theme toggle.
   """
   def theme_toggle(assigns) do
     ~H"""
@@ -179,20 +186,13 @@ defmodule JidoManagedAgentsWeb.Layouts do
         type="button"
         class="console-theme-option"
         phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop" class="size-4" />
-        <span>System</span>
-      </button>
-
-      <button
-        type="button"
-        class="console-theme-option"
-        phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
+        data-theme-toggle
+        aria-label="Switch to light theme"
+        aria-pressed="false"
+        title="Light theme"
       >
         <.icon name="hero-sun" class="size-4" />
-        <span>Light</span>
       </button>
 
       <button
@@ -200,9 +200,12 @@ defmodule JidoManagedAgentsWeb.Layouts do
         class="console-theme-option"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
+        data-theme-toggle
+        aria-label="Switch to dark theme"
+        aria-pressed="false"
+        title="Dark theme"
       >
         <.icon name="hero-moon" class="size-4" />
-        <span>Dark</span>
       </button>
     </div>
     """

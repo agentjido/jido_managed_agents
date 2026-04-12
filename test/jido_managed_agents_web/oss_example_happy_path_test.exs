@@ -7,6 +7,7 @@ defmodule JidoManagedAgentsWeb.OSSExampleHappyPathTest do
   alias JidoManagedAgents.Agents.AgentDefinition
   alias JidoManagedAgents.Integrations
   alias JidoManagedAgents.Integrations.Credential
+  alias JidoManagedAgents.Integrations.Vault
   alias JidoManagedAgents.OSSExample
   alias JidoManagedAgents.Sessions
   alias JidoManagedAgents.Sessions.Session
@@ -45,22 +46,40 @@ defmodule JidoManagedAgentsWeb.OSSExampleHappyPathTest do
 
     assert first.user.email == second.user.email
     assert Enum.map(second.agents, & &1.latest_version.version) == [1, 1, 1]
-    assert Enum.map(second.sessions, & &1.title) == ["OSS Happy Path", "OSS Threaded Trace"]
+
+    assert Enum.map(second.sessions, & &1.title) == [
+             "OSS Happy Path",
+             "OSS Threaded Trace",
+             "Release Approval Queue"
+           ]
+
+    assert Enum.map(second.vaults, & &1.name) == ["Demo Integrations", "Engineering Systems"]
 
     sessions =
       Session
       |> Ash.Query.for_read(:read, %{}, actor: second.user, domain: Sessions)
-      |> Ash.Query.filter(title in ["OSS Happy Path", "OSS Threaded Trace"])
+      |> Ash.Query.filter(
+        title in ["OSS Happy Path", "OSS Threaded Trace", "Release Approval Queue"]
+      )
+      |> Ash.read!()
+
+    vaults =
+      Vault
+      |> Ash.Query.for_read(:read, %{}, actor: second.user, domain: Integrations)
       |> Ash.read!()
 
     credentials =
       Credential
       |> Ash.Query.for_read(:read, %{}, actor: second.user, domain: Integrations)
-      |> Ash.Query.filter(vault_id == ^second.vault.id)
       |> Ash.read!()
 
-    assert length(sessions) == 2
-    assert length(credentials) == 1
+    assert length(sessions) == 3
+
+    assert Enum.count(sessions, &(get_in(&1.stop_reason || %{}, ["type"]) == "requires_action")) ==
+             1
+
+    assert length(vaults) == 2
+    assert length(credentials) == 3
   end
 
   test "example files support the documented happy path", %{conn: conn} do
