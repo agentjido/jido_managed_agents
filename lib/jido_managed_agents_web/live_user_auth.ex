@@ -37,7 +37,7 @@ defmodule JidoManagedAgentsWeb.LiveUserAuth do
 
   def on_mount(:live_no_user, _params, _session, socket) do
     if socket.assigns[:current_user] do
-      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")}
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/console")}
     else
       {:cont,
        socket |> assign(:current_user, nil) |> JidoManagedAgents.AshActor.assign_socket_actor()}
