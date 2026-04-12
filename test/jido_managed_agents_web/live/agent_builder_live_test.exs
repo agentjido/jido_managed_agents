@@ -48,15 +48,19 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
     {:ok, view, _html} = live(conn, ~p"/console/agents/new")
 
     assert has_element?(view, "#agent-builder-form")
-    render_click(element(view, "button[phx-value-section='capabilities']"))
+    refute has_element?(view, "#builder-errors")
     assert has_element?(view, "#add-tool-button")
     assert has_element?(view, "#add-mcp-server-button")
     assert has_element?(view, "#add-skill-button")
     assert has_element?(view, "#add-callable-agent-button")
+    assert has_element?(view, "#resolved-model-spec")
+    refute has_element?(view, "#agent-runner-form")
 
     render_click(element(view, "button[phx-click='toggle_preview_expanded']"))
     assert has_element?(view, "#api-preview")
     assert has_element?(view, "#yaml-preview")
+    assert render(view) =~ "Anthropic"
+    assert render(view) =~ "OpenAI"
 
     render_change(element(view, "#agent-builder-form"), %{
       "agent" => builder_params("Research Coordinator")
@@ -66,6 +70,24 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
              "&quot;name&quot;: &quot;Research Coordinator&quot;"
 
     assert element(view, "#yaml-preview") |> render() =~ "name: Research Coordinator"
+  end
+
+  test "capability actions append tool, mcp server, skill, and callable agent rows", %{conn: conn} do
+    %{conn: conn} = register_and_log_in_user(%{conn: conn})
+
+    {:ok, view, _html} = live(conn, ~p"/console/agents/new")
+
+    render_click(element(view, "#add-tool-button"))
+    assert render(view) =~ "Tool 2"
+
+    render_click(element(view, "#add-mcp-server-button"))
+    assert has_element?(view, "#agent_mcp_servers_0_name")
+
+    render_click(element(view, "#add-skill-button"))
+    assert has_element?(view, "#agent_skills_0_id")
+
+    render_click(element(view, "#add-callable-agent-button"))
+    assert has_element?(view, "#agent_callable_agents_0_id")
   end
 
   test "creates a new agent and updates an existing agent version", %{conn: conn} do
@@ -170,7 +192,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLiveTest do
       "description" => "Coordinates a console test run",
       "system" => "Stay precise.",
       "metadata_json" => ~s({"team":"platform"}),
-      "model" => %{"provider" => "", "id" => "claude-sonnet-4-6", "speed" => "standard"},
+      "model" => %{"provider" => "anthropic", "id" => "claude-sonnet-4-6", "speed" => "standard"},
       "tools" =>
         indexed_form_list([
           %{

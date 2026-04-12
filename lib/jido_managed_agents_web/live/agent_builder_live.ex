@@ -10,6 +10,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
   alias JidoManagedAgents.Agents.AgentCatalog
   alias JidoManagedAgents.Agents.AgentDefinition
   alias JidoManagedAgents.Agents.Environment
+  alias JidoManagedAgents.Agents.ModelCatalog
   alias JidoManagedAgents.Agents.Skill
   alias JidoManagedAgents.Integrations
   alias JidoManagedAgents.Integrations.Vault
@@ -53,12 +54,13 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       |> assign(:runner_task, nil)
       |> assign(:current_session, nil)
       |> assign(:page_title, "New Agent")
-      |> assign(:builder_sections, MapSet.new(["basics"]))
+      |> assign(:builder_sections, MapSet.new(["basics", "capabilities"]))
       |> assign(:preview_tab, "json")
       |> assign(:preview_expanded, false)
       |> assign(:show_archive_confirm, false)
       |> assign(:show_version_history, false)
-      |> assign_builder(default_draft())
+      |> assign(:builder_submit_attempted, false)
+      |> assign_builder(default_draft(), validate?: false)
       |> assign_runner(default_runner_params(environments))
 
     {:ok, socket}
@@ -82,7 +84,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
         |> assign(:runner_error, nil)
         |> assign(:runner_notice, nil)
         |> assign(:page_title, agent.name)
-        |> assign_builder(draft_from_definition(definition))
+        |> assign(:builder_submit_attempted, false)
+        |> assign_builder(draft_from_definition(definition), validate?: false)
         |> assign_runner(default_runner_params(socket.assigns.environments))
 
       {:noreply, socket}
@@ -110,7 +113,8 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       |> assign(:runner_error, nil)
       |> assign(:runner_notice, nil)
       |> assign(:page_title, "New Agent")
-      |> assign_builder(default_draft())
+      |> assign(:builder_submit_attempted, false)
+      |> assign_builder(default_draft(), validate?: false)
       |> assign_runner(default_runner_params(socket.assigns.environments))
 
     {:noreply, socket}
@@ -118,7 +122,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
 
   @impl true
   def handle_event("validate_builder", %{"agent" => params}, socket) do
-    {:noreply, assign_builder(socket, params)}
+    {:noreply, assign_builder(socket, params, validate?: socket.assigns.builder_submit_attempted)}
   end
 
   def handle_event("toggle_builder_section", %{"section" => section}, socket) do
@@ -152,27 +156,34 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
 
   def handle_event("add-item", %{"section" => section}, socket) do
     draft =
-      update_in(socket.assigns.draft_params[section], fn items ->
-        (items || []) ++ [default_section_item(section)]
-      end)
+      Map.update(
+        socket.assigns.draft_params,
+        section,
+        [default_section_item(section)],
+        fn items -> List.wrap(items) ++ [default_section_item(section)] end
+      )
 
-    {:noreply, assign_builder(socket, draft)}
+    {:noreply, assign_builder(socket, draft, validate?: socket.assigns.builder_submit_attempted)}
   end
 
   def handle_event("remove-item", %{"section" => section, "index" => index}, socket) do
     draft =
-      update_in(socket.assigns.draft_params[section], fn items ->
+      Map.update(socket.assigns.draft_params, section, [], fn items ->
         items
         |> List.wrap()
         |> List.delete_at(String.to_integer(index))
       end)
 
-    {:noreply, assign_builder(socket, draft)}
+    {:noreply, assign_builder(socket, draft, validate?: socket.assigns.builder_submit_attempted)}
   end
 
   def handle_event("save_agent", %{"agent" => params}, socket) do
     actor = socket.assigns.current_user
-    socket = assign_builder(socket, params)
+
+    socket =
+      socket
+      |> assign(:builder_submit_attempted, true)
+      |> assign_builder(params, validate?: true)
 
     if socket.assigns.builder_errors != [] do
       {:noreply, put_flash(socket, :error, hd(socket.assigns.builder_errors))}
@@ -455,18 +466,102 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                   </div>
 
                   <.inputs_for :let={model_form} field={@builder_form[:model]}>
-                    <div class="grid gap-4 sm:grid-cols-3">
-                      <.input
-                        field={model_form[:provider]}
-                        label="Provider"
-                        placeholder="anthropic"
-                      />
-                      <.input
-                        field={model_form[:id]}
-                        label="Model ID"
-                        placeholder="claude-sonnet-4-20250514"
-                      />
-                      <.input field={model_form[:speed]} label="Speed" placeholder="standard" />
+                    <div class="space-y-4">
+                      <div class="grid gap-4 sm:grid-cols-2">
+                        <.input
+                          field={model_form[:provider]}
+                          type="select"
+                          label="Provider"
+                          options={@model_provider_options}
+                        />
+                        <.input
+                          field={model_form[:id]}
+                          type="select"
+                          label="Model"
+                          options={@model_options}
+                        />
+                      </div>
+
+                      <div class="grid gap-4 sm:grid-cols-2">
+                        <.input
+                          field={model_form[:speed]}
+                          label="Speed"
+                          placeholder="standard"
+                        />
+                        <div class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] px-3 py-2.5 text-xs text-[var(--text-muted)]">
+                          Provider-qualified models are resolved through LLMDB and stored as an explicit provider plus model ID.
+                        </div>
+                      </div>
+
+                      <div
+                        :if={@resolved_model_spec}
+                        id="resolved-model-spec"
+                        class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] px-4 py-3"
+                      >
+                        <div class="mb-3 flex items-center gap-2">
+                          <span class="console-badge console-badge-neutral px-2 py-1 text-[10px]">
+                            LLMDB
+                          </span>
+                          <p class="text-xs font-medium text-[var(--text-strong)]">
+                            {resolved_model_name(@resolved_model_spec)}
+                          </p>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Provider
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--text-strong)]">
+                              {Atom.to_string(@resolved_model_spec.provider)}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Model ID
+                            </p>
+                            <p class="mt-1 font-mono text-xs text-[var(--text-strong)]">
+                              {@resolved_model_spec.id}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Family
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--text-strong)]">
+                              {resolved_model_family(@resolved_model_spec)}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Lifecycle
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--text-strong)]">
+                              {resolved_model_status(@resolved_model_spec)}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Context Window
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--text-strong)]">
+                              {format_model_limit(
+                                get_in(@resolved_model_spec.limits || %{}, [:context])
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-[10px] uppercase tracking-[0.12em] text-[var(--text-faint)]">
+                              Output Limit
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--text-strong)]">
+                              {format_model_limit(
+                                get_in(@resolved_model_spec.limits || %{}, [:output])
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </.inputs_for>
 
@@ -521,7 +616,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                       id="add-tool-button"
                       phx-click="add-item"
                       phx-value-section="tools"
-                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                      class="console-button console-button-secondary h-11 min-h-11 px-3 text-xs sm:h-7 sm:min-h-7"
                     >
                       <.icon name="hero-plus" class="size-3" /> Add Tool
                     </button>
@@ -542,7 +637,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                             phx-click="remove-item"
                             phx-value-section="tools"
                             phx-value-index={tool_form.index}
-                            class="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                            class="inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)] sm:h-7 sm:w-7 sm:min-h-7 sm:min-w-7"
                           >
                             <.icon name="hero-trash" class="size-3.5" />
                           </button>
@@ -629,7 +724,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                       id="add-mcp-server-button"
                       phx-click="add-item"
                       phx-value-section="mcp_servers"
-                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                      class="console-button console-button-secondary h-11 min-h-11 px-3 text-xs sm:h-7 sm:min-h-7"
                     >
                       <.icon name="hero-plus" class="size-3" /> Add
                     </button>
@@ -656,7 +751,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                             phx-click="remove-item"
                             phx-value-section="mcp_servers"
                             phx-value-index={server_form.index}
-                            class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                            class="mt-6 inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)] sm:h-7 sm:w-7 sm:min-h-7 sm:min-w-7"
                           >
                             <.icon name="hero-trash" class="size-3.5" />
                           </button>
@@ -675,7 +770,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                       id="add-skill-button"
                       phx-click="add-item"
                       phx-value-section="skills"
-                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                      class="console-button console-button-secondary h-11 min-h-11 px-3 text-xs sm:h-7 sm:min-h-7"
                     >
                       <.icon name="hero-plus" class="size-3" /> Add
                     </button>
@@ -715,7 +810,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                           phx-click="remove-item"
                           phx-value-section="skills"
                           phx-value-index={skill_form.index}
-                          class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                          class="mt-6 inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)] sm:h-7 sm:w-7 sm:min-h-7 sm:min-w-7"
                         >
                           <.icon name="hero-trash" class="size-3.5" />
                         </button>
@@ -732,7 +827,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                       id="add-callable-agent-button"
                       phx-click="add-item"
                       phx-value-section="callable_agents"
-                      class="console-button console-button-secondary h-7 px-3 text-xs"
+                      class="console-button console-button-secondary h-11 min-h-11 px-3 text-xs sm:h-7 sm:min-h-7"
                     >
                       <.icon name="hero-plus" class="size-3" /> Add
                     </button>
@@ -770,7 +865,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
                           phx-click="remove-item"
                           phx-value-section="callable_agents"
                           phx-value-index={callable_form.index}
-                          class="mt-6 inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)]"
+                          class="mt-6 inline-flex h-11 w-11 min-h-11 min-w-11 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--panel-bg)] hover:text-[var(--text-strong)] sm:h-7 sm:w-7 sm:min-h-7 sm:min-w-7"
                         >
                           <.icon name="hero-trash" class="size-3.5" />
                         </button>
@@ -863,7 +958,10 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
             </section>
           </.form>
 
-          <section class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]">
+          <section
+            :if={@agent}
+            class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-bg)]"
+          >
             <button
               type="button"
               phx-click="toggle_builder_section"
@@ -1310,14 +1408,21 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
 
   defp map_create_session_error(result), do: result
 
-  defp assign_builder(socket, params) do
+  defp assign_builder(socket, params, opts \\ []) do
+    validate? = Keyword.get(opts, :validate?, false)
     draft_params = normalize_builder_params(params)
     builder_form_params = builder_form_params(draft_params)
     preview_body = build_request_body(draft_params)
+    model_provider = selected_model_provider(draft_params)
+    resolved_model_spec = resolve_model_spec(draft_params)
 
     builder_errors =
-      preview_json_errors(draft_params) ++
-        validate_builder_preview(preview_body, socket.assigns.current_user)
+      if validate? do
+        preview_json_errors(draft_params) ++
+          validate_builder_preview(preview_body, socket.assigns.current_user)
+      else
+        []
+      end
 
     socket
     |> assign(:draft_params, draft_params)
@@ -1329,6 +1434,12 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       :recommended_filename,
       AgentDefinition.recommended_filename(Map.get(preview_body, "name", ""))
     )
+    |> assign(:model_provider_options, ModelCatalog.provider_options(model_provider))
+    |> assign(
+      :model_options,
+      ModelCatalog.model_options(model_provider, draft_params["model"]["id"])
+    )
+    |> assign(:resolved_model_spec, resolved_model_spec)
     |> assign(:builder_errors, builder_errors)
   end
 
@@ -1346,11 +1457,22 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       "description" => "",
       "system" => "",
       "metadata_json" => "{}",
-      "model" => %{"provider" => "", "id" => "claude-sonnet-4-6", "speed" => "standard"},
+      "model" => default_model_params(),
       "tools" => [default_tool()],
       "mcp_servers" => [],
       "skills" => [],
       "callable_agents" => []
+    }
+  end
+
+  defp default_model_params do
+    provider = ModelCatalog.default_provider()
+    default_model = ModelCatalog.default_model(provider)
+
+    %{
+      "provider" => if(provider, do: Atom.to_string(provider), else: ""),
+      "id" => if(default_model, do: default_model.id, else: ""),
+      "speed" => "standard"
     }
   end
 
@@ -1409,10 +1531,7 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
         params
         |> Map.get("model", %{})
         |> stringify()
-        |> Map.take(["provider", "id", "speed"])
-        |> Map.put_new("provider", "")
-        |> Map.put_new("id", "")
-        |> Map.put_new("speed", "standard"),
+        |> normalize_model_params(),
       "tools" => normalize_list(Map.get(params, "tools"), &normalize_tool_params/1),
       "mcp_servers" => normalize_list(Map.get(params, "mcp_servers"), &normalize_server_params/1),
       "skills" => normalize_list(Map.get(params, "skills"), &normalize_skill_params/1),
@@ -1467,6 +1586,46 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       "version" => Map.get(params, "version", ""),
       "metadata_json" => Map.get(params, "metadata_json", "{}")
     }
+  end
+
+  defp normalize_model_params(params) do
+    provider =
+      params
+      |> Map.get("provider", "")
+      |> ModelCatalog.normalize_provider()
+      |> case do
+        nil -> ModelCatalog.default_provider()
+        provider_id -> provider_id
+      end
+
+    model_id =
+      params
+      |> Map.get("id", "")
+      |> normalize_model_id(provider)
+
+    %{
+      "provider" => if(provider, do: Atom.to_string(provider), else: ""),
+      "id" => model_id || "",
+      "speed" => Map.get(params, "speed", "standard")
+    }
+  end
+
+  defp normalize_model_id(model_id, provider) do
+    model_id = blank_to_nil(model_id)
+
+    cond do
+      is_nil(provider) ->
+        model_id
+
+      match?({:ok, _model}, ModelCatalog.resolve(provider, model_id)) ->
+        model_id
+
+      true ->
+        case ModelCatalog.default_model(provider) do
+          %LLMDB.Model{id: id} -> id
+          _other -> model_id
+        end
+    end
   end
 
   defp normalize_runner_params(params, environments) do
@@ -1683,13 +1842,13 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
     model = stringify(model)
 
     %{
-      "provider" => Map.get(model, "provider", ""),
-      "id" => Map.get(model, "id", ""),
+      "provider" => Map.get(model, "provider", default_model_params()["provider"]),
+      "id" => Map.get(model, "id", default_model_params()["id"]),
       "speed" => Map.get(model, "speed", "standard")
     }
   end
 
-  defp model_form_params(_model), do: %{"provider" => "", "id" => "", "speed" => "standard"}
+  defp model_form_params(_model), do: default_model_params()
 
   defp tool_form_params(tool) do
     tool = stringify(tool)
@@ -1843,6 +2002,55 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
       {"#{agent.name} (v#{latest})", agent.id}
     end)
   end
+
+  defp selected_model_provider(draft_params) do
+    draft_params
+    |> get_in(["model", "provider"])
+    |> ModelCatalog.normalize_provider()
+    |> case do
+      nil -> ModelCatalog.default_provider()
+      provider -> provider
+    end
+  end
+
+  defp resolve_model_spec(draft_params) do
+    provider = selected_model_provider(draft_params)
+
+    case ModelCatalog.resolve(provider, get_in(draft_params, ["model", "id"])) do
+      {:ok, model} -> model
+      :error -> nil
+    end
+  end
+
+  defp resolved_model_name(%LLMDB.Model{name: name, id: id}) when is_binary(name) and name != "",
+    do: name <> " (" <> id <> ")"
+
+  defp resolved_model_name(%LLMDB.Model{id: id}), do: id
+
+  defp resolved_model_family(%LLMDB.Model{family: family})
+       when is_binary(family) and family != "",
+       do: family
+
+  defp resolved_model_family(_model), do: "Not specified"
+
+  defp resolved_model_status(%LLMDB.Model{} = model) do
+    model
+    |> LLMDB.Model.effective_status()
+    |> String.capitalize()
+  end
+
+  defp format_model_limit(nil), do: "n/a"
+
+  defp format_model_limit(limit) when is_integer(limit) and limit >= 1_000_000 do
+    "#{Float.round(limit / 1_000_000, 1)}M"
+  end
+
+  defp format_model_limit(limit) when is_integer(limit) and limit >= 1_000 do
+    "#{Float.round(limit / 1_000, 1)}K"
+  end
+
+  defp format_model_limit(limit) when is_integer(limit), do: Integer.to_string(limit)
+  defp format_model_limit(_limit), do: "n/a"
 
   defp section_open?(sections, section), do: MapSet.member?(sections, section)
 

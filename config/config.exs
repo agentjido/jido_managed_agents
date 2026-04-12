@@ -91,6 +91,16 @@ config :jido_managed_agents, JidoManagedAgents.Sessions.SessionRuntime,
   timeout: 30_000,
   req_http_options: []
 
+config :jido_managed_agents, JidoManagedAgents.Agents.ModelCatalog,
+  allow: [
+    anthropic: :all,
+    openai: :all,
+    google: :all,
+    groq: :all,
+    mistral: :all,
+    xai: :all
+  ]
+
 config :jido_managed_agents, JidoManagedAgents.Sessions.RuntimeTools,
   web_fetch_max_chars: 20_000,
   web_fetch_req_options: [],
