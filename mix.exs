@@ -31,7 +31,7 @@ defmodule JidoManagedAgents.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, browser_test: :test]
     ]
   end
 
@@ -122,6 +122,8 @@ defmodule JidoManagedAgents.MixProject do
       # Dev & test tooling
       {:igniter, "~> 0.7", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
+      {:phoenix_test, "~> 0.10.0", only: :test, runtime: false},
+      {:phoenix_test_playwright, "~> 0.13.0", only: :test, runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:usage_rules, "~> 1.0", only: [:dev]}
     ]
@@ -168,6 +170,7 @@ defmodule JidoManagedAgents.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build", "run priv/repo/seeds.exs"],
+      browser_test: [&run_browser_test/1],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       cover: ["test --cover"],
@@ -181,5 +184,10 @@ defmodule JidoManagedAgents.MixProject do
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
+  end
+
+  defp run_browser_test(args) do
+    System.put_env("PHX_PLAYWRIGHT", "1")
+    Mix.Task.run("test", ["--only", "playwright" | args])
   end
 end

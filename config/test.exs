@@ -1,5 +1,6 @@
 import Config
 
+config :jido_managed_agents, sql_sandbox: true
 config :jido_managed_agents, token_signing_secret: "PDTLd5YAOU2S4eWiEWpu/ddZJiAt2xgl"
 config :bcrypt_elixir, log_rounds: 1
 
@@ -26,8 +27,18 @@ config :jido_managed_agents, JidoManagedAgents.Repo,
 # you can enable the server option below.
 config :jido_managed_agents, JidoManagedAgentsWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
+  url: [host: "127.0.0.1", port: 4002],
+  check_origin: false,
   secret_key_base: "G1k53NIk7jl3zawwM0J23eTufDpp5qSWnbzxXwtBKKv4ml4TYUPKYRQRVv51+6Z1",
-  server: false
+  server: true
+
+config :phoenix_test,
+  otp_app: :jido_managed_agents,
+  playwright: [
+    browser_pool: :chromium_pool,
+    browser_pools: [[id: :chromium_pool, browser: :chromium, size: 1]],
+    ecto_sandbox_stop_owner_delay: 100
+  ]
 
 # In test we don't send emails
 config :jido_managed_agents, JidoManagedAgents.Mailer, adapter: Swoosh.Adapters.Test

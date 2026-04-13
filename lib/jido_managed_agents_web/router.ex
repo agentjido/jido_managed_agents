@@ -5,6 +5,14 @@ defmodule JidoManagedAgentsWeb.Router do
 
   import AshAuthentication.Plug.Helpers
 
+  @sandbox_live_hooks (if Application.compile_env(:jido_managed_agents, :sql_sandbox) do
+                         [JidoManagedAgentsWeb.LiveAcceptance]
+                       else
+                         []
+                       end)
+  @sandbox_live_no_user_hooks @sandbox_live_hooks ++
+                                [{JidoManagedAgentsWeb.LiveUserAuth, :live_no_user}]
+
   pipeline :browser do
     plug(:accepts, ["html"])
     plug(:fetch_session)
@@ -53,7 +61,8 @@ defmodule JidoManagedAgentsWeb.Router do
   scope "/", JidoManagedAgentsWeb do
     pipe_through(:browser)
 
-    ash_authentication_live_session :authenticated_routes do
+    ash_authentication_live_session :authenticated_routes,
+      on_mount_prepend: @sandbox_live_hooks do
       live("/console", OverviewLive, :index)
       live("/console/agents", AgentsLibraryLive, :index)
       live("/console/agents/new", AgentBuilderLive, :new)
@@ -156,7 +165,7 @@ defmodule JidoManagedAgentsWeb.Router do
       register_path: "/register",
       reset_path: "/reset",
       auth_routes_prefix: "/auth",
-      on_mount: [{JidoManagedAgentsWeb.LiveUserAuth, :live_no_user}],
+      on_mount: @sandbox_live_no_user_hooks,
       overrides: [
         JidoManagedAgentsWeb.AuthOverrides,
         Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
@@ -166,6 +175,7 @@ defmodule JidoManagedAgentsWeb.Router do
     # Remove this if you do not want to use the reset password feature
     reset_route(
       auth_routes_prefix: "/auth",
+      on_mount: @sandbox_live_hooks,
       overrides: [
         JidoManagedAgentsWeb.AuthOverrides,
         Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
@@ -175,6 +185,7 @@ defmodule JidoManagedAgentsWeb.Router do
     # Remove this if you do not use the confirmation strategy
     confirm_route(JidoManagedAgents.Accounts.User, :confirm_new_user,
       auth_routes_prefix: "/auth",
+      on_mount: @sandbox_live_hooks,
       overrides: [
         JidoManagedAgentsWeb.AuthOverrides,
         Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
@@ -184,6 +195,7 @@ defmodule JidoManagedAgentsWeb.Router do
     # Remove this if you do not use the magic link strategy.
     magic_sign_in_route(JidoManagedAgents.Accounts.User, :magic_link,
       auth_routes_prefix: "/auth",
+      on_mount: @sandbox_live_hooks,
       overrides: [
         JidoManagedAgentsWeb.AuthOverrides,
         Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI

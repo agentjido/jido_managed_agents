@@ -20,7 +20,8 @@ if System.get_env("PHX_SERVER") do
   config :jido_managed_agents, JidoManagedAgentsWeb.Endpoint, server: true
 end
 
-endpoint_port = String.to_integer(System.get_env("PORT", "4000"))
+default_port = if config_env() == :test, do: "4002", else: "4000"
+endpoint_port = String.to_integer(System.get_env("PORT", default_port))
 
 mcp_base_url =
   System.get_env(
