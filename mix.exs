@@ -14,6 +14,7 @@ defmodule JidoManagedAgents.MixProject do
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
       consolidate_protocols: Mix.env() not in [:dev, :test],
+      test_coverage: coverage_settings(),
       usage_rules: usage_rules()
     ]
   end
@@ -154,11 +155,22 @@ defmodule JidoManagedAgents.MixProject do
     ]
   end
 
+  defp coverage_settings do
+    [
+      summary: [threshold: 70],
+      ignore_modules: [
+        ~r/^Inspect\./,
+        ~r/^JidoManagedAgents\..*\.Jido\./
+      ]
+    ]
+  end
+
   defp aliases do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build", "run priv/repo/seeds.exs"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
+      cover: ["test --cover"],
       test: ["ash.setup --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind jido_managed_agents", "esbuild jido_managed_agents"],
