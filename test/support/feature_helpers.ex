@@ -4,6 +4,7 @@ defmodule JidoManagedAgentsWeb.FeatureHelpers do
   use JidoManagedAgentsWeb, :verified_routes
 
   import PhoenixTest
+  import PhoenixTest.Playwright, only: [evaluate: 3]
 
   alias JidoManagedAgents.Accounts
   alias JidoManagedAgents.Accounts.User
@@ -62,6 +63,37 @@ defmodule JidoManagedAgentsWeb.FeatureHelpers do
     |> assert_has("body .phx-connected")
     |> submit_sign_in_form(user.email, password)
     |> assert_path(~p"/console")
+  end
+
+  def visit_live(session, path) do
+    session
+    |> visit(path)
+    |> assert_has("body .phx-connected")
+  end
+
+  def set_form_value(session, selector, value) when is_binary(selector) do
+    selector_json = Jason.encode!(selector)
+    value_json = Jason.encode!(value)
+
+    session
+    |> evaluate(
+      """
+      (() => {
+        const field = document.querySelector(#{selector_json});
+        if (!field) return null;
+        field.value = #{value_json};
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        return field.value;
+      })()
+      """,
+      fn selected ->
+        if selected != value do
+          raise ExUnit.AssertionError,
+            message: "Expected #{selector} to be #{inspect(value)}, got #{inspect(selected)}"
+        end
+      end
+    )
   end
 
   defp submit_sign_in_form(session, email, password) do

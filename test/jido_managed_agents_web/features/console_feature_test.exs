@@ -44,12 +44,12 @@ defmodule JidoManagedAgentsWeb.ConsoleFeatureTest do
     |> refute_has("#builder-errors")
     |> fill_in("Name", with: "Browser Test Agent")
     |> click_button("#add-tool-button", "Add Tool")
-    |> assert_has("#agent_tools_1_type")
+    |> assert_has("select[id^='agent_tools_'][id$='_type']")
     |> click_button("#add-mcp-server-button", "Add")
-    |> assert_has("#agent_mcp_servers_0_name")
+    |> assert_has("input[id^='agent_mcp_servers_'][id$='_name']")
     |> click_button("#add-skill-button", "Add")
-    |> assert_has("#agent_skills_0_id")
+    |> assert_has("select[id^='agent_skills_'][id$='_id']")
     |> click_button("#add-callable-agent-button", "Add")
-    |> assert_has("#agent_callable_agents_0_id")
+    |> assert_has("select[id^='agent_callable_agents_'][id$='_id']")
   end
 end
