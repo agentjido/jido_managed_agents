@@ -37,6 +37,11 @@ defmodule JidoManagedAgentsWeb.Router do
     plug(:set_actor, :user)
   end
 
+  pipeline :open_api do
+    plug(:accepts, ["json"])
+    plug(OpenApiSpex.Plug.PutApiSpec, module: JidoManagedAgentsWeb.V1OpenApiSpec)
+  end
+
   pipeline :v1_api do
     plug(:accepts, ["json", "event-stream"])
     plug(JidoManagedAgentsWeb.Plugs.CaptureAnthropicHeaders)
@@ -94,6 +99,12 @@ defmodule JidoManagedAgentsWeb.Router do
       # If an authenticated user must *not* be present:
       # on_mount {JidoManagedAgentsWeb.LiveUserAuth, :live_no_user}
     end
+  end
+
+  scope "/api/json" do
+    pipe_through([:open_api])
+
+    get("/open_api", OpenApiSpex.Plug.RenderSpec, [])
   end
 
   scope "/api/json" do
