@@ -151,6 +151,16 @@ mix run examples/scripts/run_session.exs --email demo@example.com $SESSION_ID
 
 The stream replays persisted events and then stays open for live updates. Stop it with `Ctrl-C` when you have seen enough.
 
+### Quick smoke task
+
+If you want one command that exercises the managed-agent runtime without driving the `/v1` API manually, use:
+
+```bash
+mix ma
+```
+
+That task imports the sample coding assistant, ensures the restricted demo environment exists, creates a fresh session, appends a prompt, and runs `SessionRuntime.run/2` locally.
+
 ### 8. Use the dashboard
 
 The authenticated dashboard lives under `/console`:
@@ -200,6 +210,7 @@ Real provider-backed runs need credentials in the environment:
 - `OPENAI_API_KEY`
 
 Use [`examples/env/llm-providers.env.example`](examples/env/llm-providers.env.example) as the starting point. If the app is not reachable at `http://127.0.0.1:$PORT`, set `JIDO_MANAGED_AGENTS_MCP_BASE_URL` as well.
+Use [`.env.example`](.env.example) if you want a root-level file to copy into your local shell workflow.
 
 ## Jido stack
 

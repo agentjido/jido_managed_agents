@@ -31,7 +31,12 @@ defmodule JidoManagedAgents.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test, browser_test: :test]
+      preferred_envs: [
+        precommit: :test,
+        browser_test: :test,
+        managed_agent: :dev,
+        ma: :dev
+      ]
     ]
   end
 
@@ -170,6 +175,7 @@ defmodule JidoManagedAgents.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build", "run priv/repo/seeds.exs"],
+      ma: ["managed_agent"],
       browser_test: [&run_browser_test/1],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
