@@ -44,6 +44,10 @@ custom classes must fully style the input
 - Focus on **delightful details** like hover effects, loading states, and smooth page transitions
 
 
+## Release Hygiene
+
+- Do not modify `CHANGELOG.md`; release notes are generated from Git history during release, so keep changes focused on proper Conventional Commits.
+
 <!-- usage-rules-start -->
 <!-- usage_rules-start -->
 ## usage_rules usage
