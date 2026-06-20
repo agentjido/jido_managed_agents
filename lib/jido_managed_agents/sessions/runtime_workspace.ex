@@ -8,8 +8,6 @@ defmodule JidoManagedAgents.Sessions.RuntimeWorkspace do
   `:memory_vfs` or `:local_vfs`.
   """
 
-  require Ash.Query
-
   alias JidoManagedAgents.Sessions
   alias JidoManagedAgents.Sessions.Session
   alias JidoManagedAgents.Sessions.Workspace

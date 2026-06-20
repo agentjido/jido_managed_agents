@@ -2240,10 +2240,12 @@ defmodule JidoManagedAgentsWeb.AgentBuilderLive do
 
   defp field_value(%Phoenix.HTML.FormField{value: value}) when is_binary(value), do: value
 
+  defp field_value(%Phoenix.HTML.FormField{value: nil}), do: ""
+
   defp field_value(%Phoenix.HTML.FormField{value: value}) when is_atom(value),
     do: Atom.to_string(value)
 
-  defp field_value(%Phoenix.HTML.FormField{value: value}), do: to_string(value || "")
+  defp field_value(%Phoenix.HTML.FormField{value: value}), do: to_string(value)
 
   defp error_message({:invalid_request, message}), do: message
   defp error_message({:conflict, message}), do: message

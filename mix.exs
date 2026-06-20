@@ -56,7 +56,7 @@ defmodule JidoManagedAgents.MixProject do
       {:jido, "~> 2.2", override: true},
       {:jido_action,
        git: "https://github.com/agentjido/jido_action.git",
-       ref: "7b2415595aad4834265303b38a3d1928f3461a22",
+       ref: "095a8aacd460958561e95f8072bc2af847f52f5e",
        override: true},
       {:jido_ai, "~> 2.1"},
       {:jido_mcp,

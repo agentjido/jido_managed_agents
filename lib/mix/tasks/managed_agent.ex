@@ -2,7 +2,6 @@ defmodule Mix.Tasks.ManagedAgent do
   use Mix.Task
 
   require Ash.Query
-  require Logger
 
   alias JidoManagedAgents.Accounts
   alias JidoManagedAgents.Accounts.User

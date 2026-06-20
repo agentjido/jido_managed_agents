@@ -260,8 +260,6 @@ defmodule JidoManagedAgents.Agents.AgentCatalog do
   defp normalize_model(nil), do: {:error, {:invalid_request, "model is required."}}
   defp normalize_model(model), do: AgentModel.normalize(model)
 
-  defp normalize_skill_links(nil, _actor, opts), do: {:ok, Keyword.fetch!(opts, :default)}
-
   defp normalize_skill_links(skills, actor, opts) do
     SkillReference.normalize_many(
       skills,
@@ -271,11 +269,7 @@ defmodule JidoManagedAgents.Agents.AgentCatalog do
     )
   end
 
-  defp normalize_callable_agent_links(nil, _actor, opts),
-    do: {:ok, Keyword.fetch!(opts, :default)}
-
-  defp normalize_callable_agent_links(callable_agents, actor, opts)
-       when is_list(callable_agents) do
+  defp normalize_callable_agent_links(callable_agents, actor, opts) do
     callable_agents
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {callable_agent, index}, {:ok, acc} ->
@@ -287,10 +281,6 @@ defmodule JidoManagedAgents.Agents.AgentCatalog do
           {:halt, {:error, error}}
       end
     end)
-  end
-
-  defp normalize_callable_agent_links(_callable_agents, _actor, opts) do
-    {:error, {:invalid_request, "#{Keyword.fetch!(opts, :field)} must be an array of objects."}}
   end
 
   defp normalize_callable_agent_link(callable_agent, index, actor, opts)

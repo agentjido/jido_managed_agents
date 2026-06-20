@@ -3,8 +3,6 @@ defmodule JidoManagedAgentsWeb.EnvironmentConsoleLive do
 
   on_mount {JidoManagedAgentsWeb.LiveUserAuth, :live_user_required}
 
-  require Ash.Query
-
   alias JidoManagedAgents.Agents
   alias JidoManagedAgents.Agents.Environment
   alias JidoManagedAgents.Agents.EnvironmentDefinition

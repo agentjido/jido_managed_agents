@@ -1,8 +1,6 @@
 defmodule JidoManagedAgents.Sessions.SessionSkillLimit do
   @moduledoc false
 
-  require Ash.Query
-
   alias JidoManagedAgents.Agents
   alias JidoManagedAgents.Agents.Agent
   alias JidoManagedAgents.Agents.AgentVersion

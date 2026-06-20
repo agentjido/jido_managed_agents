@@ -325,18 +325,18 @@ defmodule JidoManagedAgentsWeb.AgentDetailLive do
               <div class="space-y-1">
                 <p class="console-label">Skills</p>
                 <h2 class="text-lg font-semibold text-[var(--text-strong)]">
-                  {length(@selected_version.agent_version_skills || [])} linked
+                  {length(@selected_version.agent_version_skills)} linked
                 </h2>
               </div>
-              <div :if={(@selected_version.agent_version_skills || []) == []}>
+              <div :if={@selected_version.agent_version_skills == []}>
                 <.empty_state
                   title="No skills"
                   description="This version runs without pinned skill references."
                 />
               </div>
-              <div :if={(@selected_version.agent_version_skills || []) != []} class="space-y-3">
+              <div :if={@selected_version.agent_version_skills != []} class="space-y-3">
                 <div
-                  :for={link <- @selected_version.agent_version_skills || []}
+                  :for={link <- @selected_version.agent_version_skills}
                   class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
                 >
                   <div class="flex flex-wrap items-center gap-2">
@@ -359,21 +359,21 @@ defmodule JidoManagedAgentsWeb.AgentDetailLive do
               <div class="space-y-1">
                 <p class="console-label">Callable Agents</p>
                 <h2 class="text-lg font-semibold text-[var(--text-strong)]">
-                  {length(@selected_version.agent_version_callable_agents || [])} available
+                  {length(@selected_version.agent_version_callable_agents)} available
                 </h2>
               </div>
-              <div :if={(@selected_version.agent_version_callable_agents || []) == []}>
+              <div :if={@selected_version.agent_version_callable_agents == []}>
                 <.empty_state
                   title="No callable agents"
                   description="This version does not delegate to any sibling agents."
                 />
               </div>
               <div
-                :if={(@selected_version.agent_version_callable_agents || []) != []}
+                :if={@selected_version.agent_version_callable_agents != []}
                 class="space-y-3"
               >
                 <div
-                  :for={link <- @selected_version.agent_version_callable_agents || []}
+                  :for={link <- @selected_version.agent_version_callable_agents}
                   class="rounded-[8px] border border-[var(--border-subtle)] bg-[var(--panel-muted)] p-4"
                 >
                   <div class="flex flex-wrap items-center gap-2">

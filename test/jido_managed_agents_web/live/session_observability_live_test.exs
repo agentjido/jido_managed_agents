@@ -1,8 +1,6 @@
 defmodule JidoManagedAgentsWeb.SessionObservabilityLiveTest do
   use JidoManagedAgentsWeb.ConnCase, async: false
 
-  require Ash.Query
-
   alias JidoManagedAgents.Sessions
 
   alias JidoManagedAgents.Sessions.{

@@ -192,8 +192,6 @@ defmodule JidoManagedAgents.Agents.ToolDeclaration do
     {:ok, %{"permission_policy" => @default_permission_policy}}
   end
 
-  defp normalize_builtin_config(nil, false), do: {:ok, %{}}
-
   defp normalize_builtin_config(config, default_permission_policy?) when is_map(config) do
     config = stringify(config)
 

@@ -2446,8 +2446,6 @@ defmodule JidoManagedAgents.Sessions.SessionRuntime do
 
   defp delegate_tool_call?(_tool_name), do: false
 
-  defp normalize_delegate_error(%{} = error), do: stringify(error)
-
   defp normalize_delegate_error(error),
     do: %{"error_type" => "delegate_error", "message" => inspect(error)}
 
@@ -2626,8 +2624,7 @@ defmodule JidoManagedAgents.Sessions.SessionRuntime do
 
   defp normalize_content(_content), do: []
 
-  defp normalize_payload(payload) when is_map(payload), do: stringify(payload)
-  defp normalize_payload(_payload), do: %{}
+  defp normalize_payload(payload), do: stringify(payload)
 
   defp normalize_stop_reason(stop_reason) when is_map(stop_reason), do: stringify(stop_reason)
   defp normalize_stop_reason(_stop_reason), do: nil

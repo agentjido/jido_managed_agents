@@ -137,10 +137,6 @@ defmodule JidoManagedAgents.Agents.SkillReference do
     end
   end
 
-  defp validate_skill_type(%Skill{}, _incoming_type, field) do
-    {:error, {:invalid_request, "#{field} must match the referenced skill's persisted type."}}
-  end
-
   defp required_string(params, field, opts) do
     value = Map.get(params, field)
     prefix = Keyword.get(opts, :prefix, "")

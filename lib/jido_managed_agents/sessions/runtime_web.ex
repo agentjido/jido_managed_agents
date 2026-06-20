@@ -477,8 +477,8 @@ defmodule JidoManagedAgents.Sessions.RuntimeWeb.DuckDuckGoAdapter do
   end
 
   defp parse_results(body, limit) do
-    body
-    |> Regex.split(~r/(?=<a[^>]*class="[^"]*(?:result__a|result-link)[^"]*")/i)
+    ~r/(?=<a[^>]*class="[^"]*(?:result__a|result-link)[^"]*")/i
+    |> Regex.split(body)
     |> Enum.drop(1)
     |> Enum.map(&parse_result_segment/1)
     |> Enum.reject(&is_nil/1)

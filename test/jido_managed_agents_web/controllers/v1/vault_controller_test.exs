@@ -1,8 +1,6 @@
 defmodule JidoManagedAgentsWeb.V1.VaultControllerTest do
   use JidoManagedAgentsWeb.ConnCase, async: false
 
-  require Ash.Query
-
   alias JidoManagedAgents.Integrations
   alias JidoManagedAgents.Integrations.Credential
   alias JidoManagedAgents.Repo
