@@ -128,7 +128,7 @@ defmodule JidoManagedAgents.MixProject do
       {:igniter, "~> 0.7", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_test, "~> 0.11.1", only: :test, runtime: false},
-      {:phoenix_test_playwright, "~> 0.14.0", only: :test, runtime: false},
+      {:phoenix_test_playwright, "~> 0.15.0", only: :test, runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:usage_rules, "~> 1.0", only: [:dev]}
     ]
