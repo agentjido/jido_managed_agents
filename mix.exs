@@ -73,7 +73,7 @@ defmodule JidoManagedAgents.MixProject do
       {:ash_cloak, "~> 0.3.0"},
       {:ash_jido,
        git: "https://github.com/agentjido/ash_jido.git",
-       ref: "bdbb02e5de31e8c971baa5b20ab01f826be8b790"},
+       ref: "4d87082757e5851407a55bc6672403f64172376a"},
       {:ash_json_api, "~> 1.0"},
       {:ash_phoenix, "~> 2.0"},
       {:ash_postgres, "~> 2.0"},
