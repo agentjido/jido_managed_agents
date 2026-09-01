@@ -70,7 +70,7 @@ defmodule JidoManagedAgents.MixProject do
       {:ash, "~> 3.0"},
       {:ash_authentication, "~> 4.0"},
       {:ash_authentication_phoenix, "~> 2.0"},
-      {:ash_cloak, "~> 0.3.0"},
+      {:ash_cloak, "~> 0.4.0"},
       {:ash_jido,
        git: "https://github.com/agentjido/ash_jido.git",
        ref: "4d87082757e5851407a55bc6672403f64172376a"},
@@ -119,7 +119,7 @@ defmodule JidoManagedAgents.MixProject do
       {:telemetry_poller, "~> 1.0"},
 
       # Utilities
-      {:dns_cluster, "~> 0.2.0"},
+      {:dns_cluster, "~> 0.3.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:picosat_elixir, "~> 0.2"},
