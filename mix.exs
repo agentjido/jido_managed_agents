@@ -70,7 +70,7 @@ defmodule JidoManagedAgents.MixProject do
       {:ash, "~> 3.0"},
       {:ash_authentication, "~> 4.0"},
       {:ash_authentication_phoenix, "~> 2.0"},
-      {:ash_cloak, "~> 0.3.0"},
+      {:ash_cloak, "~> 0.4.0"},
       {:ash_jido,
        git: "https://github.com/agentjido/ash_jido.git",
        ref: "4d87082757e5851407a55bc6672403f64172376a"},
