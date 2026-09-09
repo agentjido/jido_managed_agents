@@ -56,15 +56,15 @@ defmodule JidoManagedAgents.MixProject do
       {:jido, "~> 2.2", override: true},
       {:jido_action,
        git: "https://github.com/agentjido/jido_action.git",
-       ref: "095a8aacd460958561e95f8072bc2af847f52f5e",
+       ref: "71692ed57e4aab98c8440afa065e88302dbb2b4a",
        override: true},
       {:jido_ai, "~> 2.1"},
       {:jido_mcp,
        git: "https://github.com/agentjido/jido_mcp.git",
-       ref: "8cdd6397cd99d9e3c2c1493c1dcd0875b5e27182"},
+       ref: "aa7e01b233dfa1beea845ba87d3176fab67107ae"},
       {:jido_workspace,
        git: "https://github.com/agentjido/jido_workspace.git",
-       ref: "d01bf67e4911fad06a379b41b8e9f74966d73310"},
+       ref: "1f3a14eee4742c57cc9b60496d29976e4544dba2"},
 
       # Ash Framework
       {:ash, "~> 3.0"},
@@ -73,7 +73,7 @@ defmodule JidoManagedAgents.MixProject do
       {:ash_cloak, "~> 0.4.0"},
       {:ash_jido,
        git: "https://github.com/agentjido/ash_jido.git",
-       ref: "4d87082757e5851407a55bc6672403f64172376a"},
+       ref: "636a4105a64539f7e0f2ddee32607c113855d8c4"},
       {:ash_json_api, "~> 1.0"},
       {:ash_phoenix, "~> 2.0"},
       {:ash_postgres, "~> 2.0"},
@@ -82,7 +82,7 @@ defmodule JidoManagedAgents.MixProject do
       {:phoenix, "~> 1.8.5"},
       {:phoenix_ecto, "~> 4.5"},
       {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:phoenix_live_dashboard, "~> 0.9.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.3"},
       {:bandit, "~> 1.5"},
@@ -127,8 +127,8 @@ defmodule JidoManagedAgents.MixProject do
       # Dev & test tooling
       {:igniter, "~> 0.7", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_test, "~> 0.11.1", only: :test, runtime: false},
-      {:phoenix_test_playwright, "~> 0.15.0", only: :test, runtime: false},
+      {:phoenix_test, "~> 0.12.1", only: :test, runtime: false},
+      {:phoenix_test_playwright, "~> 0.17.0", only: :test, runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:usage_rules, "~> 1.0", only: [:dev]}
     ]

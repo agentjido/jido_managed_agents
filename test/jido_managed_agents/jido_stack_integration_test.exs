@@ -100,7 +100,7 @@ defmodule JidoManagedAgents.JidoStackIntegrationTest do
   defp wait_for_mcp_client!(endpoint_id, attempts) do
     {:ok, _endpoint, ref} = Jido.MCP.ClientPool.ensure_client(endpoint_id)
 
-    case Anubis.Client.Base.get_server_capabilities(ref.client) do
+    case Anubis.Client.get_server_capabilities(ref.client) do
       capabilities when is_map(capabilities) ->
         :ok
 

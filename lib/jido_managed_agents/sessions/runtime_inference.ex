@@ -147,7 +147,7 @@ defmodule JidoManagedAgents.Sessions.RuntimeInference do
   end
 
   defp build_system_prompt(system_prompt, skills) do
-    skill_prompt = SkillPrompt.render(skills)
+    skill_prompt = SkillPrompt.render(skills, include_body: true)
 
     case {normalize_optional_text(system_prompt), normalize_optional_text(skill_prompt)} do
       {nil, nil} -> nil

@@ -11,7 +11,7 @@ defmodule JidoManagedAgents.Sessions.RuntimeMCP do
   from session data.
   """
 
-  alias Anubis.Client.Base
+  alias Anubis.Client
   alias Jido.MCP
   alias JidoManagedAgents.Sessions.RuntimeMCP.EndpointPool
   alias JidoManagedAgents.Sessions.Session
@@ -510,7 +510,7 @@ defmodule JidoManagedAgents.Sessions.RuntimeMCP do
 
   defp safe_get_server_capabilities(client_name) do
     try do
-      {:ok, Base.get_server_capabilities(client_name)}
+      {:ok, Client.get_server_capabilities(client_name)}
     catch
       :exit, reason ->
         {:error, normalize_client_exit(reason, "MCP client initialization failed.")}
