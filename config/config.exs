@@ -20,6 +20,7 @@ config :ash_json_api,
 
 config :ash,
   allow_forbidden_field_for_relationships_by_default?: true,
+  default_string_length_count: :codepoints,
   include_embedded_source_by_default?: false,
   show_keysets_for_all_actions?: false,
   default_page_type: :keyset,

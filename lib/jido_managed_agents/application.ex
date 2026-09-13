@@ -17,7 +17,6 @@ defmodule JidoManagedAgents.Application do
       {Task.Supervisor, name: JidoManagedAgents.TaskSupervisor},
       JidoManagedAgents.Sessions.RuntimeMCP.EndpointPool,
       {Phoenix.PubSub, name: JidoManagedAgents.PubSub},
-      Anubis.Server.Registry,
       {JidoManagedAgents.MCP.Server, transport: {:streamable_http, [start: true]}},
       # Start a worker by calling: JidoManagedAgents.Worker.start_link(arg)
       # {JidoManagedAgents.Worker, arg},

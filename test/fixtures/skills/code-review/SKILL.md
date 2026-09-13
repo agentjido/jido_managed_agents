@@ -2,9 +2,7 @@
 name: code-review
 description: Review code changes for regressions, correctness, and missing tests.
 license: MIT
-allowed-tools:
-  - read
-  - grep
+allowed-tools: read grep
 version: 2026.04.09
 tags:
   - review
