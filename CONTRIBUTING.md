@@ -1,17 +1,24 @@
 # Contributing
 
-Thanks for considering a contribution.
+> [!IMPORTANT]
+> This repository is retired and archived as a historical prototype. It is
+> unsupported and does not accept issues, pull requests, feature work,
+> compatibility work, or security-update work. There is no supported successor
+> and no current Anthropic compatibility promise.
 
-This repository is an open source, vibe-coded prototype for a Jido-based alternative to Anthropic's managed agents. That means two things are true at the same time:
+The remaining text records the original contribution process. It is not an
+active invitation to contribute.
 
-- The project is early, fast-moving, and still rough around the edges.
-- Good community contributions can materially change the direction and quality of the system.
+This repository was an open source prototype for a Jido-based alternative to Anthropic's managed agents. Two things were true at the same time:
 
-If you want to help shape the runtime, dashboard, API compatibility, or operator workflow, PRs are welcome.
+- The project was early, fast-moving, and rough around the edges.
+- Community contributions could change the direction and quality of the system.
 
-## What This Project Is Trying To Be
+The repository no longer accepts contributions.
 
-The target is not a clone for its own sake. The target is a useful, self-hosted managed-agents stack built on Jido primitives with:
+## What This Project Tried To Be
+
+The target was a useful, self-hosted managed-agents stack built on Jido primitives with:
 
 - a local `/v1` API that feels familiar to Anthropic-style clients
 - a real browser console for agents, environments, vaults, and sessions
@@ -19,11 +26,11 @@ The target is not a clone for its own sake. The target is a useful, self-hosted 
 - MCP integration for tools and interoperability
 - clear security and ownership boundaries around credentials and runtime state
 
-When proposing changes, optimize for that goal. Contributions that make the product more operable, more inspectable, and more coherent are the most valuable.
+This target is retired. It is not a current product or roadmap statement.
 
-## Good Contribution Areas
+## Historical Contribution Areas
 
-The repo is especially open to help in these areas:
+The repository originally accepted help in these areas:
 
 - runtime correctness, supervision, and concurrency behavior
 - session observability and trace UX
@@ -73,7 +80,7 @@ mix ecto.reset
 
 If you are working on Ash resources or migrations, make sure your migration and snapshot state is clean before opening a PR.
 
-## Development Expectations
+## Historical Development Expectations
 
 ### Keep changes focused
 
@@ -139,7 +146,9 @@ If your PR changes behavior in a way a maintainer should watch carefully, say th
 
 ## Issues and Discussions
 
-If you are not sure whether a change fits, open an issue first with:
+The repository no longer accepts new issues, discussions, or change proposals.
+
+The original process asked contributors to open an issue with:
 
 - the problem statement
 - the current behavior
@@ -154,9 +163,9 @@ This is especially helpful for:
 - data model changes
 - dependency additions
 
-## Review Criteria
+## Historical Review Criteria
 
-PRs are most likely to be accepted when they:
+Pull requests were most likely to be accepted when they:
 
 - move the repo toward a credible Jido-based managed-agents alternative
 - improve correctness, clarity, or operator usability

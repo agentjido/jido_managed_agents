@@ -1,27 +1,35 @@
 # JidoManagedAgents
 
-## Status And Expectations: April 10, 2026, 5:00 p.m. CT
+> [!IMPORTANT]
+> This repository is a retired historical prototype. It is unsupported and no
+> longer receives feature, compatibility, security, or dependency updates.
+> There is no live Jido Managed Agents service or deployed database. The code
+> does not have a supported successor. Do not treat its `/v1` API, agent YAML,
+> data model, or runtime behavior as a current Anthropic compatibility promise.
+> The repository stays public only for study and historical reference.
 
-This repository is being released in public very early.
+## Historical status: April 10, 2026, 5:00 p.m. CT
+
+This repository was released in public very early.
 
 As of Friday, April 10, 2026 at 5:00 p.m. Central Time, Anthropic's Claude Managed Agents public materials are roughly 48 hours old. I wanted to respond quickly with a Jido-based alternative that the community can run, inspect, critique, and help build in the open.
 
 This is pre-alpha code. I put together a plan, built an end-to-end first implementation, and shipped it before the normal QA, hardening, and polish cycle I would usually require for a public release. I would not normally release code in this state.
 
-I am releasing it anyway because managed agents are an active topic right now, and I think it is more useful for the community to react to a working first pass than to wait for a quieter and more polished launch. This initial version should be treated as exactly that: an initial version.
+It was released because managed agents were an active topic, and a working first pass was useful for public review. This initial version must be treated only as a historical prototype.
 
 Set expectations accordingly:
 
 - the current codebase has not been QA'd to the standard I expect for a normal release
 - rough edges, missing safeguards, and incomplete UX are expected in this first pass
-- the README will be the primary place for status notes, communication, and build-in-public updates in the near term
-- quality, tests, docs, and operator experience should improve in public from here
+- the repository is frozen and will not receive further product work
+- commands, dependencies, and examples can stop working over time
 
-Jido has a commitment to quality as the ecosystem grows. The point of releasing this early is not to lower that bar. It is to let the community watch the bar get raised in real time and contribute to that process. If you want to help move this from pre-alpha prototype to a credible open source managed-agents platform, PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+This repository no longer accepts product work or compatibility requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the historical contribution record.
 
 `JidoManagedAgents` is a Phoenix application that packages a local managed-agents stack behind an Anthropic-shaped `/v1` API, an authenticated dashboard, seeded demo data, and runnable example assets.
 
-The quickest way to explore it is:
+The original local exploration path was:
 
 ```bash
 mix setup
@@ -30,7 +38,11 @@ mix phx.server
 
 `mix setup` seeds a demo user plus example agents, environments, a vault, a credential, and archived sessions that make the dashboard useful immediately.
 
-## Quickstart
+## Historical quickstart
+
+The commands in this section are unsupported. Use them only in an isolated
+local environment. Do not use the seeded account or example credentials in a
+deployed system.
 
 ### 1. Start the app
 
@@ -43,7 +55,7 @@ Open <http://localhost:4000>.
 
 ### 2. Sign in or create a user
 
-You have two supported local paths:
+The prototype had two local paths:
 
 - Use the seeded demo account at <http://localhost:4000/sign-in>
   - email: `demo@example.com`
@@ -182,9 +194,12 @@ The full example asset index is in [`examples/README.md`](examples/README.md).
 - `examples/env/llm-providers.env.example`: optional provider env vars
 - `examples/scripts/`: helper entrypoints for API keys, YAML import, and local session execution
 
-## Compatibility
+## Historical compatibility scope
 
-### Compatibility goals
+The items in this section were prototype goals. They are not current
+compatibility claims.
+
+### Original compatibility goals
 
 - `/v1` uses `x-api-key` authentication and Anthropic-style list/error envelopes for local clients.
 - Agent definitions import from and export to Anthropic-compatible `*.agent.yaml` files.
@@ -202,9 +217,9 @@ The full example asset index is in [`examples/README.md`](examples/README.md).
 - MCP credentials are stored in local vault records with write-only secret behavior instead of provider-managed secret stores.
 - The UI intentionally follows Anthropic's flow, not Anthropic branding.
 
-## Provider configuration
+## Historical provider configuration
 
-Real provider-backed runs need credentials in the environment:
+The original provider-backed runs needed credentials in the environment:
 
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
@@ -212,9 +227,9 @@ Real provider-backed runs need credentials in the environment:
 Use [`examples/env/llm-providers.env.example`](examples/env/llm-providers.env.example) as the starting point. If the app is not reachable at `http://127.0.0.1:$PORT`, set `JIDO_MANAGED_AGENTS_MCP_BASE_URL` as well.
 Use [`.env.example`](.env.example) if you want a root-level file to copy into your local shell workflow.
 
-## Jido stack
+## Historical Jido stack
 
-This project is configured with:
+The prototype was configured with:
 
 - `jido` for the supervised agent runtime
 - `jido_ai` for tool-using AI agents
@@ -230,7 +245,7 @@ Authentication and authorization stay Ash-native:
 - owner-scoped resources rely on `Ash.Policy.Authorizer` policies instead of controller branches
 - API keys authenticate as their owning user, so they inherit that user's permissions
 
-## API surfaces
+## Historical API surfaces
 
 - `/v1`: Anthropic-style local API clients and examples
 - `/api/json`: internal Ash JSON:API surface for Ash-oriented workflows
