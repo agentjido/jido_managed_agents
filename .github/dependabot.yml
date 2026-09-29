@@ -4,7 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    # This repository is retired. Keep the historical configuration, but do
+    # not open new dependency update pull requests.
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "elixir"
